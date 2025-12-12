@@ -1,0 +1,5 @@
+{
+  "name": "SyncLingua - Multi-Agent Chat Studio",
+  "description": "A sophisticated dual-pane conversation studio for language learning and more.  Features synchronized main dialogues with context-aware auxiliary agents for grammar, vocabulary, and cultural insights using Google Gemini.",
+  "requestFramePermissions": []
+}
