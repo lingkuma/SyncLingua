@@ -1,4 +1,6 @@
 
+export type ThemeMode = 'auto' | 'light' | 'dark';
+
 export interface Message {
   id: string;
   role: 'user' | 'model';
@@ -57,6 +59,7 @@ export interface AppSettings {
   model: string;
   temperature: number;
   apiKey: string;
+  theme: ThemeMode;
 }
 
 export const DEFAULT_MODELS = [
