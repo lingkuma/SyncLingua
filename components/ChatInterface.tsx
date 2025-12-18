@@ -77,7 +77,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
 
-  const scrollToBottom = (ref: React.RefObject<HTMLDivElement>) => ref.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (ref: React.RefObject<HTMLDivElement>) => {
+      if (ref.current) {
+          ref.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+  };
+  
   useEffect(() => scrollToBottom(mainEndRef), [session.mainMessages, mobileView]);
   useEffect(() => scrollToBottom(auxEndRef), [session.auxTabs, session.activeAuxTabId, mobileView]);
 
@@ -174,22 +179,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   const activeAuxPreset = auxPresets.find(p => p.id === activeAuxTab?.presetId);
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-dark-950">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-white dark:bg-dark-950">
         <div className="flex md:hidden border-b border-slate-200 dark:border-dark-800 bg-slate-50 dark:bg-dark-925 shrink-0">
             <button onClick={() => setMobileView('main')} className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors ${mobileView === 'main' ? 'border-indigo-600 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/10' : 'border-transparent text-slate-400'}`}><MessageSquare size={16} /> Chat</button>
             <button onClick={() => setMobileView('aux')} className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors ${mobileView === 'aux' ? 'border-emerald-600 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/10' : 'border-transparent text-slate-400'}`}><Briefcase size={16} /> Helpers</button>
         </div>
 
-        <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex min-h-0 overflow-hidden relative">
             {/* LEFT PANE: MAIN */}
-            <div className={`flex-col border-r border-slate-200 dark:border-dark-800 transition-all absolute inset-0 md:relative md:flex md:w-1/2 bg-white dark:bg-dark-950 ${mobileView === 'main' ? 'flex z-10' : 'hidden md:flex'}`}>
+            <div className={`flex-col border-r border-slate-200 dark:border-dark-800 transition-all absolute inset-0 md:relative md:flex md:w-1/2 bg-white dark:bg-dark-950 min-h-0 ${mobileView === 'main' ? 'flex z-10' : 'hidden md:flex'}`}>
                 <div className="h-14 border-b border-slate-200 dark:border-dark-800 hidden md:flex items-center px-4 bg-slate-50 dark:bg-dark-900/50 justify-between shrink-0">
                     <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
                         <h3 className="font-semibold text-slate-700 dark:text-slate-200 truncate">{mainPreset ? mainPreset.title : 'Main'}</h3>
                     </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar min-h-0">
                     {session.mainMessages.map(m => (
                         <MessageBubble key={m.id} msg={m} onPlayTTS={handleTTS} isPlaying={playingMessageId === m.id} isLoadingTTS={loadingTTSId === m.id} />
                     ))}
@@ -204,7 +209,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             </div>
 
             {/* RIGHT PANE: AUX */}
-            <div className={`flex-col bg-white dark:bg-dark-950 transition-all absolute inset-0 md:relative md:flex md:w-1/2 ${mobileView === 'aux' ? 'flex z-10' : 'hidden md:flex'}`}>
+            <div className={`flex-col bg-white dark:bg-dark-950 transition-all absolute inset-0 md:relative md:flex md:w-1/2 min-h-0 ${mobileView === 'aux' ? 'flex z-10' : 'hidden md:flex'}`}>
                 <div className="h-14 border-b border-slate-200 dark:border-dark-800 flex items-center bg-slate-50 dark:bg-dark-900/30 overflow-x-auto custom-scrollbar shrink-0">
                     {session.auxTabs.map(tab => {
                         const isGen = auxGeneratingIds.has(tab.id);
@@ -231,14 +236,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                     </div>
                 </div>
 
-                <div className="flex-1 flex flex-col bg-slate-50/50 dark:bg-dark-900/20">
+                <div className="flex-1 flex flex-col min-h-0 bg-slate-50/50 dark:bg-dark-900/20">
                     {activeAuxTab ? (
                         <>
                             <div className="h-10 border-b border-slate-200 dark:border-dark-800 flex items-center justify-between px-4 bg-white/50 dark:bg-dark-900/30 shrink-0">
                                 <div className="text-xs text-slate-400">{activeAuxPreset?.autoTrigger ? 'Auto-responds' : 'Context-aware'}</div>
                                 <button onClick={() => updateSession({ ...session, auxTabs: session.auxTabs.map(t => t.id === activeAuxTab.id ? { ...t, messages: [] } : t) })} className="text-xs text-slate-400 hover:text-indigo-500 transition-colors"><RefreshCw size={12} /></button>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar min-h-0">
                                 {activeAuxTab.messages.map(m => (
                                     <MessageBubble key={m.id} msg={m} onPlayTTS={handleTTS} isPlaying={playingMessageId === m.id} isLoadingTTS={loadingTTSId === m.id} />
                                 ))}
