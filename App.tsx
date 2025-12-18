@@ -156,6 +156,37 @@ const App: React.FC = () => {
 
   const updateActiveSession = (updated: Session) => setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
   const goHome = () => { setActiveSessionId(null); setIsMobileMenuOpen(false); };
+  
+  const handleExportData = () => {
+    const data = { sessions, presets, systemTemplates, sessionPresets, settings };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `synclingua-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportData = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        if (data.sessions) setSessions(data.sessions);
+        if (data.presets) setPresets(data.presets);
+        if (data.systemTemplates) setSystemTemplates(data.systemTemplates);
+        if (data.sessionPresets) setSessionPresets(data.sessionPresets);
+        if (data.settings) setSettings(prev => ({ ...data.settings, apiKey: data.settings.apiKey || prev.apiKey }));
+        alert("Data imported successfully!");
+      } catch (err) {
+        console.error("Import failed:", err);
+        alert("Failed to import data. Please ensure the file is a valid SyncLingua backup.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const performDelete = () => {
       if (itemToDelete) {
           setSessions(prev => prev.filter(s => s.id !== itemToDelete));
@@ -228,7 +259,7 @@ const App: React.FC = () => {
       </div>
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <div className="flex-1 flex flex-col min-w-0 relative h-full">
         <div className="md:hidden h-14 border-b border-slate-200 dark:border-dark-800 flex items-center px-4 bg-slate-50 dark:bg-dark-925 shrink-0 z-30">
             <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg"><Menu size={24} /></button>
             <div className="ml-2 font-semibold truncate">{activeSession ? activeSession.title : 'Dashboard'}</div>
@@ -266,7 +297,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onSave={setSettings} onExportData={() => {}} onImportData={() => {}} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onSave={setSettings} onExportData={handleExportData} onImportData={handleImportData} />
       <PresetManager isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} presets={presets} sessionPresets={sessionPresets} systemTemplates={systemTemplates} setPresets={setPresets} setSessionPresets={setSessionPresets} setSystemTemplates={setSystemTemplates} />
 
       {itemToDelete && (
