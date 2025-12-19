@@ -1,42 +1,39 @@
 
-
 export interface Message {
   id: string;
   role: 'user' | 'model';
   text: string;
   timestamp: number;
-  isAutoTrigger?: boolean; 
-  senderId?: string; // ID of the preset that generated this message
-  senderName?: string; // Display name of the sender
+  isAutoTrigger?: boolean; // Marker for UI styling
 }
 
 export interface TTSConfig {
   enabled: boolean;
   voiceName: string;
-  autoPlay: boolean; 
+  autoPlay: boolean; // Only applicable for Main AI responses
 }
 
 export interface SystemTemplate {
   id: string;
   title: string;
-  content: string; 
+  content: string; // The reusable base instruction
 }
 
 export interface Preset {
   id: string;
   title: string;
-  systemTemplateId?: string; 
-  systemPrompt: string; 
-  sharedPrompt?: string; 
+  systemTemplateId?: string; // New: Link to a base template
+  systemPrompt: string; // The "Private" instruction (Persona, Tone, etc.)
+  sharedPrompt?: string; // The "Public" instruction (Scenario, Context) shared with Aux agents
   type: 'main' | 'aux';
   ttsConfig?: TTSConfig;
-  autoTrigger?: boolean; 
+  autoTrigger?: boolean; // If true, triggers automatically after Main AI response
 }
 
 export interface SessionPreset {
   id: string;
   title: string;
-  mainPresetIds: string[]; // Changed from mainPresetId: string | null
+  mainPresetId: string | null; // Can be null if user wants to set custom prompt later
   defaultAuxPresetIds: string[];
 }
 
@@ -49,7 +46,7 @@ export interface AuxTab {
 export interface Session {
   id: string;
   title: string;
-  mainPresetIds: string[]; // Support multiple concurrent models
+  mainPresetId: string | null;
   mainMessages: Message[];
   auxTabs: AuxTab[];
   activeAuxTabId: string | null;
@@ -59,12 +56,12 @@ export interface Session {
 export interface AppSettings {
   model: string;
   temperature: number;
-  theme: 'auto' | 'light' | 'dark';
+  apiKey: string;
 }
 
 export const DEFAULT_MODELS = [
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash' },
-  { id: 'gemini-3-pro-preview', name: 'Gemini 3.0 Pro' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast)' },
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3.0 Pro (Reasoning)' },
 ];
 
 export const GEMINI_TTS_VOICES = [

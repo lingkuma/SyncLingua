@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, MessageSquare, Briefcase, Columns2, LayoutGrid } from 'lucide-react';
+import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, MessageSquare, Briefcase } from 'lucide-react';
 import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate } from '../types';
 import { streamChat, generateAuxiliaryResponse, generateSpeech } from '../services/geminiService';
 
@@ -10,58 +10,56 @@ interface ChatInterfaceProps {
   auxPresets: Preset[];
   systemTemplates: SystemTemplate[];
   settings: AppSettings;
-  mainPresets: Preset[];
+  mainPreset?: Preset;
 }
 
 const MessageBubble: React.FC<{ 
     msg: Message; 
-    onPlayTTS: (text: string, id: string, voiceName?: string) => void;
+    onPlayTTS: (text: string, id: string) => void;
     isPlaying: boolean;
     isLoadingTTS: boolean;
-    isLastInGroup?: boolean; 
-    voiceName?: string;
-}> = ({ msg, onPlayTTS, isPlaying, isLoadingTTS, isLastInGroup = true, voiceName }) => {
+    isLastInGroup?: boolean; // For visual grouping in aux
+}> = ({ msg, onPlayTTS, isPlaying, isLoadingTTS, isLastInGroup = true }) => {
+    // Determine opacity based on auto-trigger history status
+    // If it's an auto-trigger message and NOT the last one, fade it out significantly
     const isAuto = msg.isAutoTrigger;
     const opacityClass = (isAuto && !isLastInGroup) ? 'opacity-50 hover:opacity-100 transition-opacity' : 'opacity-100';
 
     return (
       <div className={`flex gap-3 mb-4 group ${msg.role === 'user' ? 'flex-row-reverse' : ''} ${opacityClass}`}>
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
             msg.role === 'user' 
-            ? (msg.isAutoTrigger ? 'bg-amber-600' : 'bg-indigo-600') 
+            ? (msg.isAutoTrigger ? 'bg-amber-600/80' : 'bg-indigo-600') 
             : 'bg-emerald-600'
-        } text-white`}>
+        }`}>
             {msg.role === 'user' ? (
-                msg.isAutoTrigger ? <Zap size={16} className="fill-white" /> : <User size={16} />
+                msg.isAutoTrigger ? <Zap size={16} className="text-white fill-white" /> : <User size={16} />
             ) : <Bot size={16} />}
         </div>
         
         <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className="flex items-center gap-2 mb-1">
-                {msg.senderName && (
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{msg.senderName}</span>
-                )}
-                {msg.isAutoTrigger && msg.role === 'user' && (
-                    <div className="text-[10px] text-amber-600 dark:text-amber-500 uppercase tracking-widest font-bold">Auto Analysis</div>
-                )}
-            </div>
-            <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm ${
+            {msg.isAutoTrigger && msg.role === 'user' && (
+                 <div className="text-[10px] text-amber-500/80 mb-1 uppercase tracking-wider font-bold">Auto Trigger</div>
+            )}
+            <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words ${
                 msg.role === 'user' 
-                ? (msg.isAutoTrigger ? 'bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-slate-700 dark:text-slate-300 italic' : 'bg-indigo-600 text-white')
-                : 'bg-white dark:bg-[#252525] border border-slate-200 dark:border-[#333333] text-slate-900 dark:text-slate-100'
+                ? (msg.isAutoTrigger ? 'bg-slate-800/50 border border-amber-900/30 text-slate-300 italic' : 'bg-slate-800 text-slate-100')
+                : 'bg-slate-900/80 border border-slate-700 text-slate-200 shadow-sm'
             } ${msg.role === 'user' ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
                 {msg.text}
             </div>
             
+            {/* Actions Line */}
             <div className={`flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity ${
                  msg.role === 'user' ? 'flex-row-reverse' : ''
             }`}>
                 <button 
-                    onClick={() => onPlayTTS(msg.text, msg.id, voiceName)}
+                    onClick={() => onPlayTTS(msg.text, msg.id)}
                     disabled={isLoadingTTS}
-                    className={`p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-[#333333] transition-colors ${
-                        isPlaying ? 'text-indigo-600 dark:text-indigo-400 bg-slate-100 dark:bg-[#333333]' : 'text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300'
+                    className={`p-1.5 rounded-md hover:bg-slate-800 transition-colors ${
+                        isPlaying ? 'text-indigo-400 bg-slate-800' : 'text-slate-500 hover:text-indigo-300'
                     }`}
+                    title="Read Aloud"
                 >
                     {isLoadingTTS ? (
                         <Loader2 size={14} className="animate-spin" />
@@ -77,289 +75,651 @@ const MessageBubble: React.FC<{
     );
 };
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSession, auxPresets, systemTemplates, settings, mainPresets }) => {
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSession, auxPresets, systemTemplates, settings, mainPreset }) => {
   const [inputMain, setInputMain] = useState('');
   const [inputAux, setInputAux] = useState('');
   const [isGeneratingMain, setIsGeneratingMain] = useState(false);
   const [isGeneratingAux, setIsGeneratingAux] = useState(false);
+  
+  // Mobile View State
   const [mobileView, setMobileView] = useState<'main' | 'aux'>('main');
-  const [auxGeneratingIds, setAuxGeneratingIds] = useState<Set<string>>(new Set());
-  const [showAuxAdder, setShowAuxAdder] = useState(false);
 
-  const mainScrollRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
+  // Track individual Aux tabs generating status (for auto triggers)
+  const [auxGeneratingIds, setAuxGeneratingIds] = useState<Set<string>>(new Set());
+
+  const mainEndRef = useRef<HTMLDivElement>(null);
   const auxEndRef = useRef<HTMLDivElement>(null);
 
+  // Audio System
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const audioCache = useRef<Map<string, AudioBuffer>>(new Map());
+  const audioCache = useRef<Map<string, AudioBuffer>>(new Map()); // ephemeral cache
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [loadingTTSId, setLoadingTTSId] = useState<string | null>(null);
 
+  // Maintain a ref to session for async callbacks
   const sessionRef = useRef(session);
-  useEffect(() => { sessionRef.current = session; }, [session]);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
-  const scrollToBottom = (id?: string) => {
-    if (id && mainScrollRefs.current[id]) {
-        mainScrollRefs.current[id]?.scrollIntoView({ behavior: 'smooth' });
-    } else if (auxEndRef.current) {
-        auxEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+  const scrollToBottom = (ref: React.RefObject<HTMLDivElement>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    mainPresets.forEach(p => scrollToBottom(p.id));
-  }, [session.mainMessages, mainPresets]);
+  useEffect(() => scrollToBottom(mainEndRef), [session.mainMessages, mobileView]);
+  useEffect(() => scrollToBottom(auxEndRef), [session.auxTabs, session.activeAuxTabId, mobileView]);
 
-  useEffect(() => scrollToBottom(), [session.auxTabs, session.activeAuxTabId]);
-
+  // Clean up audio on unmount
   useEffect(() => {
     return () => {
-        if (audioSourceRef.current) try { audioSourceRef.current.stop(); } catch(e){}
-        if (audioContextRef.current) audioContextRef.current.close();
+        if (audioSourceRef.current) {
+            audioSourceRef.current.stop();
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close();
+        }
     };
   }, []);
 
   const handleTTS = async (text: string, msgId: string, voiceName?: string) => {
+      // Stop current
       if (audioSourceRef.current) {
           try { audioSourceRef.current.stop(); } catch(e){}
           audioSourceRef.current = null;
       }
-      if (playingMessageId === msgId) { setPlayingMessageId(null); return; }
+      
+      if (playingMessageId === msgId) {
+          setPlayingMessageId(null);
+          return; // Toggle off
+      }
 
       setLoadingTTSId(msgId);
+
       try {
-          if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
-          if (audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
+          if (!audioContextRef.current) {
+              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          }
+          if (audioContextRef.current.state === 'suspended') {
+              await audioContextRef.current.resume();
+          }
 
           let buffer = audioCache.current.get(msgId);
           if (!buffer) {
-             const voice = voiceName || 'Puck';
-             buffer = await generateSpeech(text, voice, audioContextRef.current);
+             // Default voice or configured voice
+             const voice = voiceName || mainPreset?.ttsConfig?.voiceName || 'Puck';
+             buffer = await generateSpeech(settings.apiKey, text, voice, audioContextRef.current);
              audioCache.current.set(msgId, buffer);
           }
+
           const source = audioContextRef.current.createBufferSource();
           source.buffer = buffer;
           source.connect(audioContextRef.current.destination);
-          source.onended = () => setPlayingMessageId(null);
+          
+          source.onended = () => {
+              setPlayingMessageId(null);
+          };
+
           audioSourceRef.current = source;
           source.start();
           setPlayingMessageId(msgId);
+
       } catch (e) {
-          console.error("TTS failed", e);
+          console.error("TTS Playback failed", e);
+          alert("TTS Failed: Please check your API Key in settings.");
       } finally {
           setLoadingTTSId(null);
       }
   };
 
+  // --- Auto Trigger Logic ---
   const triggerAutoAuxResponse = async (tab: AuxTab, mainHistory: Message[]) => {
       const preset = auxPresets.find(p => p.id === tab.presetId);
       if (!preset) return;
 
+      // 1. Add "Auto Trigger" user message to UI
       const triggerMsgId = Date.now().toString() + Math.random().toString();
       const botMsgId = (Date.now() + 1).toString() + Math.random().toString();
       
-      const userTriggerMsg: Message = { id: triggerMsgId, role: 'user', text: "Analyzing parallel conversation sync...", timestamp: Date.now(), isAutoTrigger: true };
+      const userTriggerMsg: Message = {
+          id: triggerMsgId,
+          role: 'user',
+          text: "Analyze latest response", // Short text for UI, logic uses system prompt
+          timestamp: Date.now(),
+          isAutoTrigger: true
+      };
+
+      // Add user message to state immediately
       setAuxGeneratingIds(prev => new Set(prev).add(tab.id));
       
-      const currentTab = { ...tab, messages: [...tab.messages, userTriggerMsg] };
-      updateSession({ ...sessionRef.current, auxTabs: sessionRef.current.auxTabs.map(t => t.id === tab.id ? currentTab : t) });
+      // Prevent mutation of original tab object
+      const currentTab = {
+          ...tab,
+          messages: [...tab.messages, userTriggerMsg]
+      };
+      
+      // Update global session state 
+      const sessionWithTrigger = {
+          ...sessionRef.current,
+          auxTabs: sessionRef.current.auxTabs.map(t => t.id === tab.id ? currentTab : t)
+      };
+      updateSession(sessionWithTrigger);
 
       let currentBotText = '';
+
       try {
-        await generateAuxiliaryResponse(settings.model, preset.systemPrompt, mainPresets[0]?.sharedPrompt || '', mainHistory, [], "Sync analysis based on full synchronized context.", settings.temperature, (chunk) => {
-            currentBotText += chunk;
-            const currentSession = sessionRef.current;
-            updateSession({ ...currentSession, auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? { ...currentTab, messages: [...currentTab.messages, { id: botMsgId, role: 'model', text: currentBotText, timestamp: Date.now(), senderName: preset.title }] } : t) });
-        });
+        // 2. Call API
+        // CRITICAL: Pass empty array for auxHistory to make it stateless/independent
+        await generateAuxiliaryResponse(
+            settings.apiKey,
+            settings.model,
+            preset.systemPrompt,
+            mainPreset?.sharedPrompt || '', // Pass shared context
+            mainHistory,
+            [], // Empty aux history for auto-mode
+            "Perform your task based on the latest main conversation context.", // Generic instruction
+            settings.temperature,
+            (chunk) => {
+                currentBotText += chunk;
+                // Live update
+                const streamingTab = {
+                    ...currentTab,
+                    messages: [...currentTab.messages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }]
+                };
+                
+                const currentSession = sessionRef.current;
+                updateSession({
+                    ...currentSession,
+                    auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? streamingTab : t)
+                });
+            }
+        );
       } catch (e) {
-          console.error("Auto trigger error", e);
+          console.error("Auto Trigger Error", e);
+           const errorTab = {
+                ...currentTab,
+                messages: [...currentTab.messages, { id: botMsgId, role: 'model' as const, text: "[Auto-Analysis Failed. Check API Key.]", timestamp: Date.now() }]
+            };
+           const currentSession = sessionRef.current;
+           updateSession({
+                ...currentSession,
+                auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? errorTab : t)
+            });
       } finally {
-        setAuxGeneratingIds(prev => { const next = new Set(prev); next.delete(tab.id); return next; });
+        setAuxGeneratingIds(prev => {
+            const next = new Set(prev);
+            next.delete(tab.id);
+            return next;
+        });
       }
   };
 
+  // Main Chat Handlers
   const sendMainMessage = async () => {
     if (!inputMain.trim() || isGeneratingMain) return;
-    if (mainPresets.length === 0) { alert("Configure Main Agents in Session Preset first."); return; }
+    if (!settings.apiKey) {
+        alert("Please set your Google Gemini API Key in Settings first.");
+        return;
+    }
     
-    const newUserMsg: Message = { id: Date.now().toString(), role: 'user', text: inputMain, timestamp: Date.now() };
+    const newUserMsg: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        text: inputMain,
+        timestamp: Date.now()
+    };
+
     const updatedMessages = [...session.mainMessages, newUserMsg];
     updateSession({ ...session, mainMessages: updatedMessages });
     setInputMain('');
     setIsGeneratingMain(true);
 
-    let finishedCount = 0;
-    const totalRequests = mainPresets.length;
+    // 1. Get Base Template Content
+    const templateContent = mainPreset?.systemTemplateId 
+        ? systemTemplates.find(t => t.id === mainPreset.systemTemplateId)?.content || ''
+        : '';
 
-    mainPresets.map(async (preset, idx) => {
-        const botMsgId = `bot-${Date.now()}-${idx}`;
-        let currentBotText = '';
-        
-        const templateContent = preset.systemTemplateId ? systemTemplates.find(t => t.id === preset.systemTemplateId)?.content || '' : '';
-        const privateSystem = preset.systemPrompt || '';
-        const sharedContext = preset.sharedPrompt || '';
-        const combinedPrivate = [templateContent, privateSystem].filter(s => s.trim().length > 0).join('\n\n---\n\n');
-        const fullSystemInstruction = sharedContext ? `${combinedPrivate}\n\n[CONTEXT]: ${sharedContext}` : combinedPrivate;
+    // 2. Get Private Persona
+    const privateSystem = mainPreset?.systemPrompt || 'You are a helpful assistant.';
+    
+    // 3. Get Shared Context
+    const sharedContext = mainPreset?.sharedPrompt || '';
+    
+    // 4. Combine Private Instructions (Template + Persona)
+    const combinedPrivate = [templateContent, privateSystem]
+        .filter(s => s.trim().length > 0)
+        .join('\n\n---\n\n');
 
-        try {
-            const finalFullText = await streamChat(settings.model, fullSystemInstruction, updatedMessages, newUserMsg.text, settings.temperature, (chunk) => {
+    // 5. Final Assembly
+    const fullSystemInstruction = sharedContext 
+        ? `${combinedPrivate}\n\n[CONTEXT/SCENARIO]: ${sharedContext}` 
+        : combinedPrivate;
+
+    const botMsgId = (Date.now() + 1).toString();
+    
+    let currentBotText = '';
+    let finalFullText = '';
+    
+    try {
+        const fullResponse = await streamChat(
+            settings.apiKey,
+            settings.model,
+            fullSystemInstruction,
+            updatedMessages, 
+            newUserMsg.text,
+            settings.temperature,
+            (chunk) => {
                 currentBotText += chunk;
                 updateSession({
-                    ...sessionRef.current,
-                    mainMessages: [...sessionRef.current.mainMessages.filter(m => m.id !== botMsgId), { id: botMsgId, role: 'model', text: currentBotText, timestamp: Date.now(), senderId: preset.id, senderName: preset.title }]
+                    ...session, // This might be slightly stale if typing very fast, but usually fine for main chat
+                    mainMessages: [
+                        ...updatedMessages,
+                        { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                    ]
                 });
+            }
+        );
+        finalFullText = fullResponse;
+
+        // Auto-play TTS if enabled in preset
+        if (mainPreset?.ttsConfig?.autoPlay && fullResponse) {
+             setTimeout(() => {
+                 handleTTS(fullResponse, botMsgId, mainPreset.ttsConfig?.voiceName);
+             }, 100);
+        }
+
+    } catch (e) {
+        updateSession({
+            ...session,
+            mainMessages: [
+                ...updatedMessages,
+                { id: botMsgId, role: 'model' as const, text: "[Error generating response. Please check API Key in Settings.]", timestamp: Date.now() }
+            ]
+        });
+    } finally {
+        setIsGeneratingMain(false);
+        
+        // --- CHECK AND TRIGGER AUTO-AUX ---
+        // We only trigger if we got a valid response
+        if (finalFullText) {
+            const finalMainHistory = [...updatedMessages, { id: botMsgId, role: 'model' as const, text: finalFullText, timestamp: Date.now() }];
+            
+            // Find tabs with presets that have autoTrigger enabled
+            const autoTabs = session.auxTabs.filter(t => {
+                const preset = auxPresets.find(p => p.id === t.presetId);
+                return preset?.autoTrigger === true;
             });
 
-            if (preset.ttsConfig?.autoPlay) {
-                setTimeout(() => handleTTS(finalFullText, botMsgId, preset.ttsConfig?.voiceName), 150);
-            }
-        } catch (e) {
-            console.error(`Error for ${preset.title}`, e);
-        } finally {
-            finishedCount++;
-            if (finishedCount === totalRequests) {
-                setIsGeneratingMain(false);
-                const finalMainHistory = sessionRef.current.mainMessages;
-                const autoTabs = session.auxTabs.filter(t => auxPresets.find(p => p.id === t.presetId)?.autoTrigger);
+            if (autoTabs.length > 0) {
+                // Pass the updated history explicitly
                 autoTabs.forEach(tab => triggerAutoAuxResponse(tab, finalMainHistory));
             }
         }
-    });
+    }
   };
 
+  // Aux Chat Handlers
   const activeAuxTab = session.auxTabs.find(t => t.id === session.activeAuxTabId);
   const activeAuxPreset = auxPresets.find(p => p.id === activeAuxTab?.presetId);
 
   const sendAuxMessage = async () => {
     if (!inputAux.trim() || isGeneratingAux || !activeAuxTab || !activeAuxPreset) return;
-    const newUserMsg: Message = { id: Date.now().toString(), role: 'user', text: inputAux, timestamp: Date.now() };
-    const updatedTabMessages = [...activeAuxTab.messages, newUserMsg];
-    updateSession({ ...session, auxTabs: session.auxTabs.map(t => t.id === session.activeAuxTabId ? { ...t, messages: updatedTabMessages } : t) });
+    if (!settings.apiKey) {
+        alert("Please set your Google Gemini API Key in Settings first.");
+        return;
+    }
+
+    const newUserMsg: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        text: inputAux,
+        timestamp: Date.now()
+    };
+
+    const currentTabMessages = activeAuxTab.messages;
+    const updatedTabMessages = [...currentTabMessages, newUserMsg];
+    
+    const updatedTabs = session.auxTabs.map(t => 
+        t.id === session.activeAuxTabId 
+        ? { ...t, messages: updatedTabMessages } 
+        : t
+    );
+
+    updateSession({ ...session, auxTabs: updatedTabs });
     setInputAux('');
     setIsGeneratingAux(true);
 
+    const botMsgId = (Date.now() + 1).toString();
     let currentBotText = '';
-    const botMsgId = `aux-bot-${Date.now()}`;
+
     try {
-        await generateAuxiliaryResponse(settings.model, activeAuxPreset.systemPrompt, mainPresets[0]?.sharedPrompt || '', session.mainMessages, updatedTabMessages, newUserMsg.text, settings.temperature, (chunk) => {
-            currentBotText += chunk;
-            updateSession({ ...sessionRef.current, auxTabs: sessionRef.current.auxTabs.map(t => t.id === session.activeAuxTabId ? { ...t, messages: [...updatedTabMessages, { id: botMsgId, role: 'model', text: currentBotText, timestamp: Date.now(), senderName: activeAuxPreset.title }] } : t) });
-        });
-    } finally { setIsGeneratingAux(false); }
+        await generateAuxiliaryResponse(
+            settings.apiKey,
+            settings.model,
+            activeAuxPreset.systemPrompt,
+            mainPreset?.sharedPrompt || '', // Pass Shared Context
+            session.mainMessages, 
+            updatedTabMessages, 
+            newUserMsg.text, 
+            settings.temperature,
+            (chunk) => {
+                currentBotText += chunk;
+                const streamingTabs = session.auxTabs.map(t => 
+                    t.id === session.activeAuxTabId 
+                    ? { 
+                        ...t, 
+                        messages: [...updatedTabMessages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }] 
+                      } 
+                    : t
+                );
+                updateSession({ ...session, auxTabs: streamingTabs });
+            }
+        );
+    } catch (e) {
+         const errorTabs = session.auxTabs.map(t => 
+            t.id === session.activeAuxTabId 
+            ? { 
+                ...t, 
+                messages: [...updatedTabMessages, { id: botMsgId, role: 'model' as const, text: "[Error: Check API Key]", timestamp: Date.now() }] 
+              } 
+            : t
+        );
+        updateSession({ ...session, auxTabs: errorTabs });
+    } finally {
+        setIsGeneratingAux(false);
+    }
   };
 
   const handleAddAuxTab = (presetId: string) => {
-      const newTab = { id: Date.now().toString(), presetId, messages: [] };
-      updateSession({ ...session, auxTabs: [...session.auxTabs, newTab], activeAuxTabId: newTab.id });
-      setShowAuxAdder(false);
+      const newTab = {
+          id: Date.now().toString(),
+          presetId,
+          messages: []
+      };
+      updateSession({
+          ...session,
+          auxTabs: [...session.auxTabs, newTab],
+          activeAuxTabId: newTab.id
+      });
   };
 
   const handleCloseAuxTab = (tabId: string, e: React.MouseEvent) => {
       e.stopPropagation();
       const newTabs = session.auxTabs.filter(t => t.id !== tabId);
-      updateSession({ ...session, auxTabs: newTabs, activeAuxTabId: session.activeAuxTabId === tabId ? (newTabs[0]?.id || null) : session.activeAuxTabId });
+      let newActiveId = session.activeAuxTabId;
+      if (session.activeAuxTabId === tabId) {
+          newActiveId = newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null;
+      }
+      updateSession({
+          ...session,
+          auxTabs: newTabs,
+          activeAuxTabId: newActiveId
+      });
   };
 
+  const clearAuxContext = () => {
+      if (!activeAuxTab) return;
+      const updatedTabs = session.auxTabs.map(t => 
+        t.id === activeAuxTab.id ? { ...t, messages: [] } : t
+      );
+      updateSession({ ...session, auxTabs: updatedTabs });
+  }
+
+  // UI Selection State for Aux adder
+  const [showAuxAdder, setShowAuxAdder] = useState(false);
+
   return (
-    <div className="flex flex-col h-full w-full bg-white dark:bg-[#191919] overflow-hidden">
-        <div className="flex md:hidden border-b border-slate-200 dark:border-[#2d2d2d] bg-slate-50 dark:bg-[#141414] shrink-0">
-            <button onClick={() => setMobileView('main')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition-colors ${mobileView === 'main' ? 'border-indigo-600 text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/10' : 'border-transparent text-slate-500'}`}><MessageSquare size={16} /> Main</button>
-            <button onClick={() => setMobileView('aux')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition-colors ${mobileView === 'aux' ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/10' : 'border-transparent text-slate-500'}`}><Briefcase size={16} /> Helpers</button>
+    <div className="flex flex-col h-full w-full bg-slate-950 overflow-hidden">
+        
+        {/* MOBILE TAB NAVIGATOR (Visible only on md:hidden) */}
+        <div className="flex md:hidden border-b border-slate-800 bg-slate-925 shrink-0">
+            <button
+                onClick={() => setMobileView('main')}
+                className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                    mobileView === 'main' 
+                    ? 'border-indigo-500 text-indigo-100 bg-indigo-900/10' 
+                    : 'border-transparent text-slate-500'
+                }`}
+            >
+                <MessageSquare size={16} /> Main Chat
+            </button>
+            <button
+                onClick={() => setMobileView('aux')}
+                className={`flex-1 py-3 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 transition-colors ${
+                    mobileView === 'aux' 
+                    ? 'border-emerald-500 text-emerald-100 bg-emerald-900/10' 
+                    : 'border-transparent text-slate-500'
+                }`}
+            >
+                <Briefcase size={16} /> Helper Tools
+            </button>
         </div>
 
+        {/* CONTENT CONTAINER - Flex on desktop, Conditional block on mobile */}
         <div className="flex-1 flex overflow-hidden relative">
-            {/* PARALLEL MAIN VIEW */}
-            <div className={`flex-col border-r border-slate-200 dark:border-[#2d2d2d] transition-all absolute inset-0 md:relative md:flex md:w-2/3 bg-slate-100/50 dark:bg-[#111] ${mobileView === 'main' ? 'flex z-10' : 'hidden md:flex'}`}>
-                <div className="h-14 border-b border-slate-200 dark:border-[#2d2d2d] hidden md:flex items-center px-4 bg-white dark:bg-[#1f1f1f] justify-between shrink-0">
+            
+            {/* LEFT PANE: MAIN CHAT */}
+            <div className={`
+                flex-col border-r border-slate-800 transition-all absolute inset-0 md:relative md:flex md:w-1/2 bg-slate-950
+                ${mobileView === 'main' ? 'flex z-10' : 'hidden md:flex'}
+            `}>
+                {/* Header - Desktop Only, Hidden on Mobile to save space (since we have Tab Nav) */}
+                <div className="h-14 border-b border-slate-800 hidden md:flex items-center px-4 bg-slate-900/50 justify-between shrink-0">
                     <div className="flex items-center gap-2">
-                        <Columns2 size={16} className="text-indigo-600" />
-                        <h3 className="font-bold text-slate-900 dark:text-slate-200 text-sm">Synchronized Dialogue Hub</h3>
-                        <span className="text-[10px] px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full font-bold uppercase tracking-widest">{mainPresets.length} Agents</span>
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                        <h3 className="font-semibold text-slate-200">
+                            {mainPreset ? mainPreset.title : 'Main Conversation'}
+                        </h3>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {!settings.apiKey && (
+                            <div className="flex items-center gap-1 text-amber-500 text-xs font-bold animate-pulse" title="API Key missing in Settings">
+                                <TriangleAlert size={14} />
+                                <span>No API Key</span>
+                            </div>
+                        )}
+                        <div className="text-xs text-slate-500 px-2 py-1 bg-slate-800 rounded">
+                            {session.mainMessages.length} msgs
+                        </div>
                     </div>
                 </div>
 
-                <div className={`flex-1 overflow-x-auto overflow-y-hidden flex h-full ${mainPresets.length > 1 ? 'gap-0.5' : ''}`}>
-                    {mainPresets.map((preset) => (
-                        <div key={preset.id} className="min-w-[320px] flex-1 flex flex-col h-full bg-white dark:bg-[#191919] border-r border-slate-200 dark:border-[#2d2d2d] last:border-r-0 relative">
-                            <div className="h-10 border-b border-slate-100 dark:border-[#2d2d2d] flex items-center px-4 bg-slate-50/50 dark:bg-[#1f1f1f]/50 shrink-0 sticky top-0 z-20 backdrop-blur-sm">
-                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate">{preset.title}</span>
-                                {preset.ttsConfig?.autoPlay && <Volume2 size={12} className="ml-2 text-indigo-500" />}
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                                {session.mainMessages.filter(m => m.role === 'user' || m.senderId === preset.id).map(m => (
-                                    <MessageBubble 
-                                        key={m.id} 
-                                        msg={m} 
-                                        onPlayTTS={handleTTS} 
-                                        isPlaying={playingMessageId === m.id} 
-                                        isLoadingTTS={loadingTTSId === m.id}
-                                        voiceName={preset.ttsConfig?.voiceName}
-                                    />
-                                ))}
-                                {/* Fix: Wrapping ref assignment in braces to return void and prevent TS type mismatch */}
-                                <div ref={(el) => { mainScrollRefs.current[preset.id] = el; }} />
-                            </div>
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                    {session.mainMessages.length === 0 && (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-2">
+                            <Layers size={48} className="opacity-20" />
+                            <p className="text-sm">Start the conversation...</p>
+                            {!settings.apiKey && <p className="text-xs text-amber-500">Please set API Key in settings.</p>}
                         </div>
-                    ))}
-                    {mainPresets.length === 0 && (
-                        <div className="flex-1 flex flex-col items-center justify-center text-slate-400"><LayoutGrid size={48} className="opacity-10 mb-4" /><p>No Main Agents Configured</p></div>
                     )}
+                    {session.mainMessages.map(m => (
+                        <MessageBubble 
+                            key={m.id} 
+                            msg={m} 
+                            onPlayTTS={handleTTS}
+                            isPlaying={playingMessageId === m.id}
+                            isLoadingTTS={loadingTTSId === m.id}
+                        />
+                    ))}
+                    <div ref={mainEndRef} />
                 </div>
 
-                <div className="p-4 bg-white dark:bg-[#191919] border-t border-slate-200 dark:border-[#2d2d2d] shrink-0">
-                    <div className="max-w-4xl mx-auto flex gap-2">
-                        <input className="flex-1 bg-slate-100 dark:bg-[#141414] text-slate-900 dark:text-slate-100 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-slate-200 dark:border-[#333333] text-base" placeholder="Send sync command..." value={inputMain} onChange={e => setInputMain(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMainMessage()} disabled={isGeneratingMain} />
-                        <button onClick={sendMainMessage} disabled={isGeneratingMain || !inputMain.trim()} className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 dark:disabled:bg-[#222222] text-white p-3 rounded-xl shadow-lg transition-all"><Send size={20} /></button>
+                <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0">
+                    <div className="flex gap-2 relative">
+                        <input
+                            className="flex-1 bg-slate-800 text-slate-100 placeholder-slate-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-slate-700 text-base md:text-sm" // increased font size on mobile to prevent zoom
+                            placeholder={mainPreset ? `Speak as User...` : "Type a message..."}
+                            value={inputMain}
+                            onChange={e => setInputMain(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && sendMainMessage()}
+                            disabled={isGeneratingMain}
+                        />
+                        <button 
+                            onClick={sendMainMessage}
+                            disabled={isGeneratingMain || !inputMain.trim()}
+                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white p-3 rounded-lg transition-colors"
+                        >
+                            <Send size={20} />
+                        </button>
                     </div>
                 </div>
             </div>
 
-            {/* AUX VIEW */}
-            <div className={`flex-col bg-slate-50 dark:bg-[#141414] transition-all absolute inset-0 md:relative md:flex md:w-1/3 ${mobileView === 'aux' ? 'flex z-10' : 'hidden md:flex'}`}>
-                <div className="h-14 border-b border-slate-200 dark:border-[#2d2d2d] flex items-center bg-white dark:bg-[#1f1f1f] overflow-x-auto shrink-0 px-2 relative">
-                    {session.auxTabs.map(tab => (
-                        <div key={tab.id} onClick={() => updateSession({ ...session, activeAuxTabId: tab.id })} className={`group flex items-center gap-2 px-3 h-10 text-[10px] font-bold uppercase tracking-wider border border-slate-200 dark:border-[#333333] rounded-lg mr-2 cursor-pointer transition-all shrink-0 ${session.activeAuxTabId === tab.id ? 'bg-indigo-600 text-white border-indigo-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}>
-                            {auxPresets.find(p => p.id === tab.presetId)?.autoTrigger && <Zap size={10} className="fill-current text-amber-400" />}
-                            <span className="truncate max-w-[80px]">{auxPresets.find(p => p.id === tab.presetId)?.title}</span>
-                            <button onClick={(e) => handleCloseAuxTab(tab.id, e)} className="p-1 hover:text-red-300"><X size={10} /></button>
-                        </div>
-                    ))}
-                    <button onClick={() => setShowAuxAdder(!showAuxAdder)} className="p-2 text-slate-400 hover:text-indigo-600 shrink-0"><Plus size={18} /></button>
-                    
-                    {showAuxAdder && (
-                        <div className="absolute top-14 left-2 right-2 bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#333333] rounded-xl shadow-xl z-50 p-2 max-h-60 overflow-y-auto">
-                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-2 pt-1">Available Helpers</div>
-                            {auxPresets.filter(p => !session.auxTabs.some(t => t.presetId === p.id)).map(p => (
-                                <button key={p.id} onClick={() => handleAddAuxTab(p.id)} className="w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-[#252525] rounded-lg flex items-center justify-between transition-colors">
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{p.title}</span>
-                                    {p.autoTrigger && <Zap size={12} className="text-amber-500 fill-amber-500" />}
+            {/* RIGHT PANE: AUX CHAT */}
+            <div className={`
+                flex-col bg-slate-950 transition-all absolute inset-0 md:relative md:flex md:w-1/2
+                ${mobileView === 'aux' ? 'flex z-10' : 'hidden md:flex'}
+            `}>
+                {/* AUX TABS HEADER */}
+                <div className="h-14 border-b border-slate-800 flex items-center bg-slate-900/30 overflow-x-auto custom-scrollbar shrink-0">
+                    {session.auxTabs.map(tab => {
+                        const preset = auxPresets.find(p => p.id === tab.presetId);
+                        const isGenerating = auxGeneratingIds.has(tab.id);
+                        return (
+                            <div 
+                                key={tab.id}
+                                onClick={() => updateSession({ ...session, activeAuxTabId: tab.id })}
+                                className={`group flex items-center gap-2 px-4 h-full text-sm font-medium border-r border-slate-800 cursor-pointer min-w-[140px] max-w-[200px] select-none relative ${
+                                    session.activeAuxTabId === tab.id 
+                                    ? 'bg-slate-900 text-indigo-400 border-b-2 border-b-indigo-500' 
+                                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/50'
+                                }`}
+                            >
+                                {/* Auto Trigger Indicator on Tab */}
+                                {preset?.autoTrigger && (
+                                    <Zap size={10} className="text-amber-500 fill-amber-500 absolute top-1.5 right-1.5" />
+                                )}
+                                
+                                <span className="truncate flex-1 flex items-center gap-2">
+                                    {isGenerating && <Loader2 size={12} className="animate-spin text-indigo-500" />}
+                                    {preset?.title || 'Unknown'}
+                                </span>
+                                <button 
+                                    onClick={(e) => handleCloseAuxTab(tab.id, e)}
+                                    className="md:opacity-0 group-hover:opacity-100 hover:text-red-400 p-1 opacity-100" // Always visible on mobile
+                                >
+                                    <X size={12} />
                                 </button>
-                            ))}
-                            {auxPresets.filter(p => !session.auxTabs.some(t => t.presetId === p.id)).length === 0 && (
-                                <div className="p-4 text-center text-xs text-slate-500">All helpers already active</div>
-                            )}
-                        </div>
-                    )}
+                            </div>
+                        );
+                    })}
+                    
+                    <div className="relative h-full flex items-center px-2">
+                        <button 
+                            onClick={() => setShowAuxAdder(!showAuxAdder)}
+                            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                        >
+                            <Plus size={18} />
+                        </button>
+                        
+                        {showAuxAdder && (
+                            <div className="absolute top-12 left-0 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 overflow-hidden">
+                                <div className="p-2 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-900/50">Add Helper</div>
+                                <div className="max-h-64 overflow-y-auto">
+                                    {auxPresets.map(p => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => { handleAddAuxTab(p.id); setShowAuxAdder(false); }}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors border-b border-slate-700/50 last:border-0 flex justify-between items-center"
+                                        >
+                                            {p.title}
+                                            {p.autoTrigger && <Zap size={12} className="text-amber-400 fill-amber-400" />}
+                                        </button>
+                                    ))}
+                                    {auxPresets.length === 0 && (
+                                        <div className="p-4 text-center text-xs text-slate-500">No aux presets found. Create one in Library.</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                <div className="flex-1 flex flex-col bg-white dark:bg-[#191919]">
+                {/* AUX CHAT AREA */}
+                <div className="flex-1 flex flex-col min-h-0 bg-slate-900/20">
                     {activeAuxTab ? (
                         <>
+                            {/* TOOLBAR */}
+                            <div className="h-10 border-b border-slate-800/50 flex items-center justify-between px-4 bg-slate-900/30 shrink-0">
+                                <div className="text-xs text-slate-500 flex items-center gap-1">
+                                    {activeAuxPreset?.autoTrigger ? (
+                                        <>
+                                            <Zap size={12} className="text-amber-500" />
+                                            <span className="text-amber-500 font-medium hidden sm:inline">Auto-Responds</span>
+                                            <span className="text-amber-500 font-medium sm:hidden">Auto</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="text-emerald-500">●</span> <span className="hidden sm:inline">Monitoring Context</span>
+                                        </>
+                                    )}
+                                </div>
+                                <button 
+                                    onClick={clearAuxContext}
+                                    title="Clear history for this helper (keeps context)"
+                                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2 py-1 hover:bg-slate-800 rounded transition-colors"
+                                >
+                                    <RefreshCw size={12} /> Clear Memory
+                                </button>
+                            </div>
+
+                            {/* MESSAGES */}
                             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                                {activeAuxTab.messages.map(m => (
-                                    <MessageBubble key={m.id} msg={m} onPlayTTS={handleTTS} isPlaying={playingMessageId === m.id} isLoadingTTS={loadingTTSId === m.id} />
+                                {activeAuxTab.messages.length === 0 && (
+                                    <div className="mt-10 text-center text-slate-600 text-sm px-8">
+                                        <p className="mb-2 font-medium text-slate-500">{activeAuxPreset?.title}</p>
+                                        <p>{activeAuxPreset?.autoTrigger 
+                                            ? "I will automatically analyze every new AI response." 
+                                            : "Ask me anything about the conversation on the left."}
+                                        </p>
+                                        {mainPreset?.sharedPrompt && (
+                                            <div className="mt-4 p-3 bg-slate-800/50 rounded-lg text-xs border border-slate-700/50 text-slate-400">
+                                                <div className="font-bold text-emerald-500 mb-1 uppercase tracking-wider">Context Aware</div>
+                                                <div className="line-clamp-3">{mainPreset.sharedPrompt}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {activeAuxTab.messages.map((m, idx, arr) => (
+                                    <MessageBubble 
+                                        key={m.id} 
+                                        msg={m} 
+                                        onPlayTTS={handleTTS} 
+                                        isPlaying={playingMessageId === m.id}
+                                        isLoadingTTS={loadingTTSId === m.id}
+                                        isLastInGroup={idx >= arr.length - 2} // Crude approximation for "last interaction"
+                                    />
                                 ))}
                                 <div ref={auxEndRef} />
                             </div>
-                            <div className="p-4 border-t border-slate-200 dark:border-[#2d2d2d] shrink-0">
+
+                            {/* INPUT */}
+                            <div className="p-4 bg-slate-900 border-t border-slate-800 shrink-0">
                                 <div className="flex gap-2">
-                                    <input className="flex-1 bg-slate-50 dark:bg-[#141414] text-slate-900 dark:text-slate-100 rounded-xl px-4 py-2 text-sm" placeholder="Aux inquiry..." value={inputAux} onChange={e => setInputAux(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAuxMessage()} disabled={isGeneratingAux} />
-                                    <button onClick={sendAuxMessage} disabled={isGeneratingAux || !inputAux.trim()} className="bg-emerald-600 text-white p-2 rounded-lg"><Send size={18} /></button>
+                                    <input
+                                        className="flex-1 bg-slate-800 text-slate-100 placeholder-slate-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-600/50 outline-none border border-slate-700 text-base md:text-sm"
+                                        placeholder={activeAuxPreset?.autoTrigger ? "Ask manual question..." : `Ask ${activeAuxPreset?.title || 'helper'}...`}
+                                        value={inputAux}
+                                        onChange={e => setInputAux(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && sendAuxMessage()}
+                                        disabled={isGeneratingAux}
+                                    />
+                                    <button 
+                                        onClick={sendAuxMessage}
+                                        disabled={isGeneratingAux || !inputAux.trim()}
+                                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white p-3 rounded-lg transition-colors"
+                                    >
+                                        <Send size={20} />
+                                    </button>
                                 </div>
                             </div>
                         </>
                     ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 px-8 text-center"><Briefcase size={32} className="mb-2 opacity-10" /><p className="text-xs">Select or add a helper to analyze the synchronized flow.</p></div>
+                        <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
+                            <Layers size={64} className="mb-4 text-slate-700" />
+                            <h3 className="text-lg font-medium text-slate-400">No Helper Selected</h3>
+                            <p className="text-sm mt-2 px-6 text-center">Open a new tab (+) to add a language tool.</p>
+                        </div>
                     )}
                 </div>
             </div>
