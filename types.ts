@@ -1,39 +1,42 @@
 
+
 export interface Message {
   id: string;
   role: 'user' | 'model';
   text: string;
   timestamp: number;
-  isAutoTrigger?: boolean; // Marker for UI styling
+  isAutoTrigger?: boolean; 
+  senderId?: string; // ID of the preset that generated this message
+  senderName?: string; // Display name of the sender
 }
 
 export interface TTSConfig {
   enabled: boolean;
   voiceName: string;
-  autoPlay: boolean; // Only applicable for Main AI responses
+  autoPlay: boolean; 
 }
 
 export interface SystemTemplate {
   id: string;
   title: string;
-  content: string; // The reusable base instruction
+  content: string; 
 }
 
 export interface Preset {
   id: string;
   title: string;
-  systemTemplateId?: string; // New: Link to a base template
-  systemPrompt: string; // The "Private" instruction (Persona, Tone, etc.)
-  sharedPrompt?: string; // The "Public" instruction (Scenario, Context) shared with Aux agents
+  systemTemplateId?: string; 
+  systemPrompt: string; 
+  sharedPrompt?: string; 
   type: 'main' | 'aux';
   ttsConfig?: TTSConfig;
-  autoTrigger?: boolean; // If true, triggers automatically after Main AI response
+  autoTrigger?: boolean; 
 }
 
 export interface SessionPreset {
   id: string;
   title: string;
-  mainPresetId: string | null; // Can be null if user wants to set custom prompt later
+  mainPresetIds: string[]; // Changed from mainPresetId: string | null
   defaultAuxPresetIds: string[];
 }
 
@@ -46,7 +49,7 @@ export interface AuxTab {
 export interface Session {
   id: string;
   title: string;
-  mainPresetId: string | null;
+  mainPresetIds: string[]; // Support multiple concurrent models
   mainMessages: Message[];
   auxTabs: AuxTab[];
   activeAuxTabId: string | null;
@@ -56,7 +59,6 @@ export interface Session {
 export interface AppSettings {
   model: string;
   temperature: number;
-  apiKey: string;
   theme: 'auto' | 'light' | 'dark';
 }
 

@@ -1,621 +1,149 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Menu, X } from 'lucide-react';
+import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Menu, X, Columns2 } from 'lucide-react';
 import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, DEFAULT_MODELS } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
 import { ChatInterface } from './components/ChatInterface';
 
-// --- INITIAL MOCK DATA ---
-
 const INITIAL_TEMPLATES: SystemTemplate[] = [
     {
         id: 'st1',
         title: 'Strict Roleplay',
-        content: `RULES:
-1. Stay in character at all times. Do not break the fourth wall.
-2. If the user speaks a different language, respond as if you only understand your character's language, or guide them back gently.
-3. Be concise. Avoid long lectures.`
+        content: `Stay in character. Do not break fourth wall.`
     },
     {
         id: 'st2',
-        title: 'Friendly Tutor (Corrections)',
-        content: `ROLE:
-You are a friendly language tutor. 
-1. Maintain the conversation naturally.
-2. Implicitly correct mistakes in your response (Recast).
-3. Do not stop the flow to explain grammar unless asked.`
-    },
-    {
-        id: 'st3',
-        title: 'Professional Service',
-        content: `TONE:
-Professional, polite, efficient. Use formal address (e.g. Sie in German, Vous in French).
-Focus on solving the user's problem immediately.`
+        title: 'Linguistic Analysis',
+        content: `Focus on sentence structure and lexical choice.`
     }
 ];
 
 const INITIAL_MAIN_PRESETS: Preset[] = [
-  { 
-      id: 'mp1', 
-      title: 'German Supermarket', 
-      type: 'main', 
-      systemTemplateId: 'st3', // Uses "Professional Service" template
-      systemPrompt: 'You are a cashier at a German supermarket (Edeka). Ask for a loyalty card (DeutschlandCard). Speak only German.',
-      sharedPrompt: 'The user is a customer buying groceries at a checkout counter in Berlin. It is rush hour.',
-      ttsConfig: { enabled: true, voiceName: 'Fenrir', autoPlay: true }
-  },
-  { 
-      id: 'mp2', 
-      title: 'Job Interview (English)', 
-      type: 'main', 
-      systemTemplateId: 'st1', // Uses "Strict Roleplay"
-      systemPrompt: 'You are a hiring manager at a tech company. Conduct a behavioral interview. Ask follow-up questions. Maintain a slightly intimidating tone.',
-      sharedPrompt: 'The user is applying for a Senior Frontend Developer role. This is the second round of interviews.',
-      ttsConfig: { enabled: true, voiceName: 'Puck', autoPlay: false }
-  },
+  { id: 'mp1', title: 'Formal Cashier', type: 'main', systemPrompt: 'You are a formal Edeka cashier in Hamburg.', ttsConfig: { enabled: true, voiceName: 'Fenrir', autoPlay: true } },
+  { id: 'mp2', title: 'Casual Local', type: 'main', systemPrompt: 'You are a friendly, casual Berlin local.', ttsConfig: { enabled: true, voiceName: 'Puck', autoPlay: false } },
 ];
 
 const INITIAL_AUX_PRESETS: Preset[] = [
-  { id: 'ap1', title: 'Grammar Coach', type: 'aux', systemPrompt: 'Analyze the user\'s last message in the context of the main conversation. Point out grammar mistakes and suggest corrections. Keep it brief.' },
-  { id: 'ap2', title: 'Vocabulary Expander', type: 'aux', systemPrompt: 'Suggest 3 advanced synonyms for key words used in the conversation context. Explain nuance.' },
-  { id: 'ap3', title: 'Cultural Insight', type: 'aux', systemPrompt: 'Does the conversation context (ScenarioContext) reveal any cultural norms or etiquette? Explain them to the user.' },
+  { id: 'ap1', title: 'Grammar Coach', type: 'aux', autoTrigger: true, systemPrompt: 'Analyze grammar in the main conversation.' },
+  { id: 'ap2', title: 'Vocabulary Coach', type: 'aux', systemPrompt: 'Suggest better words.' },
 ];
 
 const INITIAL_SESSION_PRESETS: SessionPreset[] = [
-    { id: 'sp1', title: 'German Practice', mainPresetId: 'mp1', defaultAuxPresetIds: ['ap1', 'ap2'] }
+    { id: 'sp1', title: 'Dual Personality Practice', mainPresetIds: ['mp1', 'mp2'], defaultAuxPresetIds: ['ap1'] }
 ];
 
-const STORAGE_KEYS = {
-    SESSIONS: 'synclingua_sessions',
-    PRESETS: 'synclingua_presets',
-    TEMPLATES: 'synclingua_templates',
-    SESSION_PRESETS: 'synclingua_session_presets',
-    SETTINGS: 'synclingua_settings',
-    ACTIVE_SESSION: 'synclingua_active_session_id'
-};
+const STORAGE_KEYS = { SESSIONS: 'synclingua_sessions', PRESETS: 'synclingua_presets', TEMPLATES: 'synclingua_templates', SESSION_PRESETS: 'synclingua_session_presets', SETTINGS: 'synclingua_settings', ACTIVE_SESSION: 'synclingua_active_session_id' };
 
 const App: React.FC = () => {
-  // Persistence Helpers
   const loadState = <T,>(key: string, defaultVal: T): T => {
-      try {
-          const saved = localStorage.getItem(key);
-          if (saved) return JSON.parse(saved);
-      } catch (e) {
-          console.warn(`Failed to load ${key}`, e);
-      }
+      try { const saved = localStorage.getItem(key); if (saved) return JSON.parse(saved); } catch (e) {}
       return defaultVal;
   };
 
-  // State
   const [sessions, setSessions] = useState<Session[]>(() => loadState(STORAGE_KEYS.SESSIONS, []));
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => loadState(STORAGE_KEYS.ACTIVE_SESSION, null));
-  
-  const [presets, setPresets] = useState<Preset[]>(() => 
-      loadState(STORAGE_KEYS.PRESETS, [...INITIAL_MAIN_PRESETS, ...INITIAL_AUX_PRESETS])
-  );
-  
-  const [systemTemplates, setSystemTemplates] = useState<SystemTemplate[]>(() => 
-    loadState(STORAGE_KEYS.TEMPLATES, INITIAL_TEMPLATES)
-  );
-
-  const [sessionPresets, setSessionPresets] = useState<SessionPreset[]>(() => 
-      loadState(STORAGE_KEYS.SESSION_PRESETS, INITIAL_SESSION_PRESETS)
-  );
-  
+  const [presets, setPresets] = useState<Preset[]>(() => loadState(STORAGE_KEYS.PRESETS, [...INITIAL_MAIN_PRESETS, ...INITIAL_AUX_PRESETS]));
+  const [systemTemplates, setSystemTemplates] = useState<SystemTemplate[]>(() => loadState(STORAGE_KEYS.TEMPLATES, INITIAL_TEMPLATES));
+  const [sessionPresets, setSessionPresets] = useState<SessionPreset[]>(() => loadState(STORAGE_KEYS.SESSION_PRESETS, INITIAL_SESSION_PRESETS));
   const [settings, setSettings] = useState<AppSettings>(() => {
       const saved = loadState<AppSettings | null>(STORAGE_KEYS.SETTINGS, null);
-      let envKey = '';
-      try {
-        if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-            envKey = process.env.API_KEY;
-        }
-      } catch(e) {}
-
-      if (saved) {
-          return {
-              ...saved,
-              apiKey: saved.apiKey || envKey,
-              theme: saved.theme || 'auto'
-          };
-      }
-      return { 
-          model: DEFAULT_MODELS[0].id, 
-          temperature: 0.7, 
-          apiKey: envKey,
-          theme: 'auto'
-      };
+      if (saved) return { ...saved };
+      return { model: DEFAULT_MODELS[0].id, temperature: 0.7, theme: 'auto' };
   });
 
-  // Persistence Effects
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions)); }, [sessions]);
-  useEffect(() => { 
-      if (activeSessionId) localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(activeSessionId));
-      else localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION);
-  }, [activeSessionId]);
+  useEffect(() => { if (activeSessionId) localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(activeSessionId)); else localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION); }, [activeSessionId]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(presets)); }, [presets]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(systemTemplates)); }, [systemTemplates]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SESSION_PRESETS, JSON.stringify(sessionPresets)); }, [sessionPresets]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); }, [settings]);
 
-  // Theme Logic
   useEffect(() => {
-    const root = window.document.documentElement;
-    const applyTheme = () => {
-        const isDark = 
-            settings.theme === 'dark' || 
-            (settings.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        
-        if (isDark) {
-            root.classList.add('dark');
-        } else {
-            root.classList.remove('dark');
-        }
-    };
-
-    applyTheme();
-
-    if (settings.theme === 'auto') {
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const listener = () => applyTheme();
-        mediaQuery.addEventListener('change', listener);
-        return () => mediaQuery.removeEventListener('change', listener);
-    }
+    const isDark = settings.theme === 'dark' || (settings.theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', isDark);
   }, [settings.theme]);
 
-
-  // Modals & UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
-  // Custom Confirmation/Input Modal State
-  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  const [itemToRename, setItemToRename] = useState<{id: string, title: string} | null>(null);
-  const renameInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (itemToRename && renameInputRef.current) {
-        setTimeout(() => renameInputRef.current?.focus(), 50);
-    }
-  }, [itemToRename]);
-
-  // Active Session Logic
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
-  const activeMainPreset = activeSession?.mainPresetId 
-    ? presets.find(p => p.id === activeSession.mainPresetId) 
-    : undefined;
-
+  const activeMainPresets = activeSession ? presets.filter(p => activeSession.mainPresetIds.includes(p.id)) : [];
   const auxPresets = presets.filter(p => p.type === 'aux');
 
-  // Actions
   const createSession = (sessionPresetId: string) => {
     const template = sessionPresets.find(sp => sp.id === sessionPresetId);
     if (!template) return;
-
     const newSession: Session = {
         id: Date.now().toString(),
         title: template.title,
-        mainPresetId: template.mainPresetId,
+        mainPresetIds: template.mainPresetIds,
         mainMessages: [],
-        auxTabs: template.defaultAuxPresetIds.map(apId => ({
-            id: Date.now().toString() + Math.random(),
-            presetId: apId,
-            messages: []
-        })),
-        activeAuxTabId: null, 
+        auxTabs: template.defaultAuxPresetIds.map(apId => ({ id: `${Date.now()}-${Math.random()}`, presetId: apId, messages: [] })),
+        activeAuxTabId: template.defaultAuxPresetIds[0] || null,
         createdAt: Date.now()
     };
-    
-    if (newSession.auxTabs.length > 0) {
-        newSession.activeAuxTabId = newSession.auxTabs[0].id;
-    }
-
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
     setIsMobileMenuOpen(false);
   };
 
   const createEmptySession = () => {
-      const newSession: Session = {
-        id: Date.now().toString(),
-        title: 'New Session',
-        mainPresetId: null,
-        mainMessages: [],
-        auxTabs: [],
-        activeAuxTabId: null,
-        createdAt: Date.now()
-    };
-    setSessions([newSession, ...sessions]);
-    setActiveSessionId(newSession.id);
-    setIsMobileMenuOpen(false);
-  }
-
-  const updateActiveSession = (updated: Session) => {
-    setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
-  };
-
-  const goHome = () => {
-      setActiveSessionId(null);
-      setIsMobileMenuOpen(false);
-  };
-
-  const promptDeleteSession = (e: React.MouseEvent, id: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setItemToDelete(id);
-  }
-
-  const performDelete = () => {
-      if (itemToDelete) {
-          setSessions(prev => prev.filter(s => s.id !== itemToDelete));
-          if (activeSessionId === itemToDelete) setActiveSessionId(null);
-          setItemToDelete(null);
-      }
-  }
-
-  const promptRenameSession = (e: React.MouseEvent, id: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const session = sessions.find(s => s.id === id);
-      if (session) {
-          setItemToRename({ id, title: session.title });
-      }
-  }
-
-  const performRename = () => {
-      if (itemToRename && itemToRename.title.trim() !== "") {
-          setSessions(prev => prev.map(s => s.id === itemToRename.id ? { ...s, title: itemToRename.title.trim() } : s));
-          setItemToRename(null);
-      }
-  }
-
-  const handleExportData = () => {
-    const backupData = {
-        version: 2, 
-        timestamp: Date.now(),
-        data: {
-            sessions,
-            presets,
-            systemTemplates,
-            sessionPresets,
-            settings
-        }
-    };
-    
-    const jsonString = JSON.stringify(backupData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `synclingua-backup-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportData = (file: File) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-          try {
-              const content = e.target?.result as string;
-              const parsed = JSON.parse(content);
-              
-              if (!parsed.data) {
-                  throw new Error("Invalid format: missing data field");
-              }
-
-              const { sessions: newSessions, presets: newPresets, sessionPresets: newSP, settings: newSettings, systemTemplates: newTemplates } = parsed.data;
-
-              if (Array.isArray(newSessions)) setSessions(newSessions);
-              if (Array.isArray(newPresets)) setPresets(newPresets);
-              if (Array.isArray(newSP)) setSessionPresets(newSP);
-              if (Array.isArray(newTemplates)) setSystemTemplates(newTemplates);
-              if (newSettings) setSettings(newSettings);
-
-              setActiveSessionId(null);
-              setIsSettingsOpen(false);
-              
-              alert("Import successful! All data has been restored.");
-
-          } catch (err) {
-              console.error("Import failed:", err);
-              alert("Failed to import data. Please ensure the file is a valid SyncLingua JSON backup.");
-          }
-      };
-      reader.readAsText(file);
+      const newSession: Session = { id: Date.now().toString(), title: 'Empty Workspace', mainPresetIds: [], mainMessages: [], auxTabs: [], activeAuxTabId: null, createdAt: Date.now() };
+      setSessions([newSession, ...sessions]);
+      setActiveSessionId(newSession.id);
   };
 
   return (
     <div className="flex h-screen w-screen bg-white dark:bg-[#191919] text-slate-900 dark:text-slate-100 font-sans overflow-hidden">
-      
-      {/* MOBILE OVERLAY */}
-      {isMobileMenuOpen && (
-        <div 
-            className="fixed inset-0 bg-black/50 dark:bg-black/70 z-40 md:hidden backdrop-blur-sm"
-            onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* SIDEBAR (Responsive) */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-slate-50 dark:bg-[#141414] border-r border-slate-200 dark:border-[#2d2d2d] flex flex-col transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
-        md:relative md:translate-x-0 md:w-64 md:flex-shrink-0
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        {/* Header */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-slate-50 dark:bg-[#141414] border-r border-slate-200 dark:border-[#2d2d2d] flex flex-col transition-transform md:relative md:translate-x-0 md:w-64 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-4 border-b border-slate-200 dark:border-[#2d2d2d] flex items-center justify-between">
-            <div 
-                onClick={goHome}
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-            >
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/20">
-                    <MessageSquare size={18} className="text-white" />
-                </div>
-                <h1 className="font-bold text-lg tracking-tight text-slate-900 dark:text-slate-100">SyncLingua</h1>
+            <div onClick={() => setActiveSessionId(null)} className="flex items-center gap-2 cursor-pointer">
+                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Columns2 size={18} className="text-white" /></div>
+                <h1 className="font-bold text-lg">SyncLingua</h1>
             </div>
-            {/* Close button only visible on mobile */}
-            <button 
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            >
-                <X size={24} />
-            </button>
+            <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden"><X size={20} /></button>
         </div>
-
-        {/* Navigation */}
         <div className="p-4 space-y-2">
-            <button 
-                onClick={goHome}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${
-                    !activeSessionId 
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1f1f1f] hover:text-slate-900 dark:hover:text-slate-200'
-                }`}
-            >
-                <LayoutGrid size={18} /> Dashboard
-            </button>
-
-            <button 
-                onClick={() => { setIsLibraryOpen(true); setIsMobileMenuOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1f1f1f] hover:text-slate-900 dark:hover:text-slate-200"
-            >
-                <Book size={18} /> Library
-            </button>
-
-            <button
-                onClick={createEmptySession}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1f1f1f] hover:text-slate-900 dark:hover:text-slate-200"
-            >
-                <Plus size={18} /> Quick Empty
-            </button>
+            <button onClick={() => setActiveSessionId(null)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all ${!activeSessionId ? 'bg-indigo-600 text-white' : 'hover:bg-slate-200 dark:hover:bg-[#1f1f1f]'}`}><LayoutGrid size={18} /> Hub</button>
+            <button onClick={() => setIsLibraryOpen(true)} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-slate-200 dark:hover:bg-[#1f1f1f]"><Book size={18} /> Library</button>
         </div>
-
-        {/* Session List */}
-        <div className="flex-1 overflow-y-auto px-2 custom-scrollbar space-y-1 pt-2 border-t border-slate-200 dark:border-[#2d2d2d]/50">
-            <div className="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Recent</div>
+        <div className="flex-1 overflow-y-auto px-2 space-y-1">
+            <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sessions</div>
             {sessions.map(s => (
-                <div 
-                    key={s.id}
-                    className={`group relative mx-2 rounded-lg transition-all border ${
-                        activeSessionId === s.id 
-                        ? 'bg-white dark:bg-[#1f1f1f] border-slate-200 dark:border-[#333333] shadow-sm' 
-                        : 'border-transparent hover:bg-slate-100 dark:hover:bg-[#1a1a1a] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                >
-                    <div 
-                        onClick={() => { setActiveSessionId(s.id); setIsMobileMenuOpen(false); }}
-                        className="p-3 pr-20 cursor-pointer select-none relative z-0" 
-                    >
-                        <div className={`font-medium truncate text-sm ${activeSessionId === s.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-current'}`}>
-                            {s.title}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-600 mt-1 truncate">
-                            {new Date(s.createdAt).toLocaleDateString()}
-                        </div>
-                    </div>
-                    
-                    <div 
-                        className={`absolute right-2 top-2 flex gap-1 z-10 ${
-                            activeSessionId === s.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                        } transition-opacity duration-200`}
-                    >
-                        <button 
-                            type="button"
-                            onClick={(e) => promptRenameSession(e, s.id)} 
-                            className="flex items-center justify-center w-7 h-7 bg-white dark:bg-[#252525] hover:bg-slate-50 dark:hover:bg-[#333333] rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shadow-sm border border-slate-200 dark:border-[#333333] cursor-pointer"
-                        >
-                            <Pencil size={14} />
-                        </button>
-                        <button 
-                            type="button"
-                            onClick={(e) => promptDeleteSession(e, s.id)} 
-                            className="flex items-center justify-center w-7 h-7 bg-white dark:bg-[#252525] hover:bg-slate-50 dark:hover:bg-[#333333] rounded text-slate-400 hover:text-red-600 transition-colors shadow-sm border border-slate-200 dark:border-[#333333] cursor-pointer"
-                        >
-                            <Trash2 size={14} />
-                        </button>
-                    </div>
+                <div key={s.id} onClick={() => setActiveSessionId(s.id)} className={`p-3 rounded-lg cursor-pointer transition-all ${activeSessionId === s.id ? 'bg-white dark:bg-[#1f1f1f] shadow-sm border border-slate-200 dark:border-[#333333]' : 'hover:bg-slate-100 dark:hover:bg-[#1a1a1a]'}`}>
+                    <div className={`text-sm font-medium truncate ${activeSessionId === s.id ? 'text-indigo-600' : ''}`}>{s.title}</div>
                 </div>
             ))}
-            {sessions.length === 0 && (
-                <div className="p-4 text-center text-slate-500 dark:text-slate-600 text-xs italic">
-                    No history.
-                </div>
-            )}
         </div>
-
-        {/* Footer Settings */}
         <div className="p-4 border-t border-slate-200 dark:border-[#2d2d2d]">
-            <button 
-                onClick={() => { setIsSettingsOpen(true); setIsMobileMenuOpen(false); }}
-                className="flex items-center gap-3 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1f1f1f]"
-            >
-                <Settings size={20} />
-                <span>Settings</span>
-            </button>
+            <button onClick={() => setIsSettingsOpen(true)} className="flex items-center gap-3 text-slate-500 hover:text-indigo-600 transition-colors w-full p-2"><Settings size={20} /> Settings</button>
         </div>
       </div>
 
-      {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 h-full relative bg-white dark:bg-[#191919]">
-        
-        {/* Mobile Header */}
-        <div className="md:hidden h-14 border-b border-slate-200 dark:border-[#2d2d2d] flex items-center px-4 bg-slate-50 dark:bg-[#141414] sticky top-0 z-30 flex-shrink-0">
-            <button 
-                onClick={() => setIsMobileMenuOpen(true)}
-                className="p-2 -ml-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg active:bg-slate-100 dark:active:bg-[#1f1f1f]"
-            >
-                <Menu size={24} />
-            </button>
-            <div className="ml-2 font-semibold text-slate-900 dark:text-slate-200 truncate">
-                {activeSession ? activeSession.title : 'Dashboard'}
-            </div>
-        </div>
-
-        <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-            {activeSession ? (
-                <ChatInterface 
-                    session={activeSession}
-                    updateSession={updateActiveSession}
-                    auxPresets={auxPresets}
-                    systemTemplates={systemTemplates}
-                    settings={settings}
-                    mainPreset={activeMainPreset}
-                />
-            ) : (
-                // DASHBOARD VIEW
-                <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
-                    <div className="w-16 h-16 bg-slate-100 dark:bg-[#222222] rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-indigo-600/10">
-                        <MessageSquare size={32} className="text-indigo-600" />
-                    </div>
-                    <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-200 mb-3 tracking-tight text-center">SyncLingua Studio</h2>
-                    <p className="max-w-md text-center mb-10 text-slate-500 dark:text-slate-400 text-lg">
-                        Choose a template to start a new synchronized multi-model session.
-                    </p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-5xl">
-                        {/* New Empty Card */}
-                        <button 
-                            onClick={createEmptySession}
-                            className="flex flex-col items-center justify-center p-6 bg-slate-50/50 dark:bg-[#222222]/50 border border-slate-200 dark:border-[#333333] border-dashed hover:border-indigo-600 dark:hover:border-indigo-500/50 hover:bg-slate-100 dark:hover:bg-[#222222] rounded-xl transition-all group h-48"
-                        >
-                            <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-[#333333] flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                                <Plus size={24} className="text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
-                            </div>
-                            <h3 className="font-semibold text-slate-700 dark:text-slate-300">Empty Session</h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-600 mt-1">Start from scratch</p>
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {activeSession ? (
+            <ChatInterface session={activeSession} updateSession={(u) => setSessions(prev => prev.map(s => s.id === u.id ? u : s))} auxPresets={auxPresets} systemTemplates={systemTemplates} settings={settings} mainPresets={activeMainPresets} />
+        ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-[#111]">
+                <h2 className="text-3xl font-bold mb-8">Synchronized Dialogue Studio</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
+                    <button onClick={createEmptySession} className="p-6 bg-white dark:bg-[#1f1f1f] border-2 border-dashed border-slate-300 dark:border-[#333333] rounded-2xl flex flex-col items-center justify-center hover:border-indigo-500 transition-all h-48"><Plus size={32} className="mb-2 text-slate-300" /> New Empty Flow</button>
+                    {sessionPresets.map(sp => (
+                        <button key={sp.id} onClick={() => createSession(sp.id)} className="p-6 bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#333333] rounded-2xl shadow-sm text-left hover:shadow-xl transition-all h-48 flex flex-col">
+                            <h3 className="text-xl font-bold mb-auto">{sp.title}</h3>
+                            <div className="text-xs text-slate-500 mt-2 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-500"></div> {sp.mainPresetIds.length} Agents Synced</div>
+                            <div className="text-xs text-slate-500 mt-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> {sp.defaultAuxPresetIds.length} Passive Analyzers</div>
                         </button>
-
-                        {/* Presets */}
-                        {sessionPresets.map(sp => (
-                            <button 
-                                key={sp.id}
-                                onClick={() => createSession(sp.id)}
-                                className="flex flex-col text-left p-6 bg-white dark:bg-[#222222] border border-slate-200 dark:border-[#333333] hover:border-indigo-600 dark:hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-600/5 dark:hover:shadow-indigo-900/10 rounded-xl transition-all group h-48 relative overflow-hidden"
-                            >
-                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <LayoutGrid size={64} className="text-slate-300 dark:text-slate-700" />
-                                </div>
-                                <h3 className="font-semibold text-xl text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mb-2">{sp.title}</h3>
-                                <div className="flex-1">
-                                    <p className="text-sm text-slate-500 dark:text-slate-500 line-clamp-2">
-                                        Main: <span className="text-slate-700 dark:text-slate-400">{presets.find(p => p.id === sp.mainPresetId)?.title || 'Custom'}</span>
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2 mt-4 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-[#191919]/50 p-2 rounded-lg w-fit">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    {sp.defaultAuxPresetIds.length} Active Helpers
-                                </div>
-                            </button>
-                        ))}
-                    </div>
+                    ))}
                 </div>
-            )}
-        </div>
+            </div>
+        )}
       </div>
 
-      {/* MODALS */}
-      <SettingsModal 
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        onSave={setSettings}
-        onExportData={handleExportData}
-        onImportData={handleImportData}
-      />
-
-      <PresetManager
-        isOpen={isLibraryOpen}
-        onClose={() => setIsLibraryOpen(false)}
-        presets={presets}
-        sessionPresets={sessionPresets}
-        systemTemplates={systemTemplates}
-        setPresets={setPresets}
-        setSessionPresets={setSessionPresets}
-        setSystemTemplates={setSystemTemplates}
-      />
-
-      {/* DELETE CONFIRMATION MODAL */}
-      {itemToDelete && (
-          <div className="fixed inset-0 bg-black/50 dark:bg-black/80 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#333333] rounded-xl p-6 max-w-sm w-full shadow-2xl scale-100">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Delete Conversation?</h3>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">This action cannot be undone.</p>
-                  <div className="flex justify-end gap-3">
-                      <button 
-                          onClick={() => setItemToDelete(null)}
-                          className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#252525] rounded-lg text-sm transition-colors"
-                      >
-                          Cancel
-                      </button>
-                      <button 
-                          onClick={performDelete}
-                          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-medium transition-colors"
-                      >
-                          Delete
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* RENAME MODAL */}
-      {itemToRename && (
-          <div className="fixed inset-0 bg-black/50 dark:bg-black/80 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-              <div className="bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#333333] rounded-xl p-6 max-w-sm w-full shadow-2xl scale-100">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Rename Session</h3>
-                  <input
-                      ref={renameInputRef}
-                      type="text"
-                      value={itemToRename.title}
-                      onChange={(e) => setItemToRename({ ...itemToRename, title: e.target.value })}
-                      onKeyDown={(e) => {
-                          if (e.key === 'Enter') performRename();
-                          if (e.key === 'Escape') setItemToRename(null);
-                      }}
-                      className="w-full bg-slate-50 dark:bg-[#252525] border border-slate-200 dark:border-[#333333] rounded-lg p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-600 dark:focus:ring-indigo-500 outline-none mb-6"
-                      placeholder="Enter new name..."
-                  />
-                  <div className="flex justify-end gap-3">
-                      <button 
-                          onClick={() => setItemToRename(null)}
-                          className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#252525] rounded-lg text-sm transition-colors"
-                      >
-                          Cancel
-                      </button>
-                      <button 
-                          onClick={performRename}
-                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
-                      >
-                          Save
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onSave={setSettings} onExportData={() => {}} onImportData={() => {}} />
+      <PresetManager isOpen={isLibraryOpen} onClose={() => setIsLibraryOpen(false)} presets={presets} sessionPresets={sessionPresets} systemTemplates={systemTemplates} setPresets={setPresets} setSessionPresets={setSessionPresets} setSystemTemplates={setSystemTemplates} />
     </div>
   );
 };

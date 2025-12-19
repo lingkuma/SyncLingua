@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-import { X, Settings as SettingsIcon, Download, Upload, Key, Eye, EyeOff, Sun, Moon, Monitor } from 'lucide-react';
+import { X, Settings as SettingsIcon, Download, Upload, Sun, Moon, Monitor } from 'lucide-react';
 import { AppSettings, DEFAULT_MODELS } from '../types';
 
 interface SettingsModalProps {
@@ -21,7 +21,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onImportData 
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [showKey, setShowKey] = useState(false);
 
   if (!isOpen) return null;
 
@@ -29,7 +28,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (e.target.files && e.target.files[0]) {
       onImportData(e.target.files[0]);
     }
-    // Reset value so same file can be selected again if needed
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -76,43 +74,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </button>
                     );
                 })}
-             </div>
-          </div>
-
-          <div className="border-t border-slate-100 dark:border-[#2d2d2d]"></div>
-
-          {/* API Info */}
-          <div>
-             <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                <Key size={14} className="text-emerald-600 dark:text-emerald-400" /> API Connection
-             </h3>
-             <div className="bg-slate-50 dark:bg-[#141414] p-4 rounded-lg border border-slate-200 dark:border-[#333333]">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Google AI API Key</label>
-                <div className="relative">
-                    <input 
-                        type={showKey ? "text" : "password"}
-                        value={settings.apiKey}
-                        onChange={(e) => onSave({ ...settings, apiKey: e.target.value })}
-                        placeholder="AIzaSy..."
-                        className="w-full bg-white dark:bg-[#1f1f1f] text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-[#444444] rounded-lg p-3 pr-10 focus:ring-2 focus:ring-indigo-600 dark:focus:ring-indigo-500 focus:border-transparent outline-none text-sm font-mono"
-                    />
-                    <button 
-                        type="button"
-                        onClick={() => setShowKey(!showKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    >
-                        {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                </div>
-                <p className="text-xs text-slate-500 mt-2">
-                    Enter your Google Gemini API Key. It is stored locally in your browser.
-                </p>
-                {settings.apiKey && (
-                    <div className="flex items-center gap-2 mt-3 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                        Key Configured
-                    </div>
-                )}
              </div>
           </div>
 

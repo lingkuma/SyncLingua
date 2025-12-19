@@ -61,7 +61,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
           const newSP: SessionPreset = {
               id: Date.now().toString(),
               title: editingSessionPreset.title || 'New Session Template',
-              mainPresetId: editingSessionPreset.mainPresetId || null,
+              mainPresetIds: editingSessionPreset.mainPresetIds || [],
               defaultAuxPresetIds: editingSessionPreset.defaultAuxPresetIds || []
           };
           setSessionPresets([...sessionPresets, newSP]);
@@ -99,7 +99,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
       setEditingSessionPreset(null);
       setEditingTemplate(null);
 
-      if (activeTab === 'session') setEditingSessionPreset({ defaultAuxPresetIds: [] });
+      if (activeTab === 'session') setEditingSessionPreset({ mainPresetIds: [], defaultAuxPresetIds: [] });
       else if (activeTab === 'template') setEditingTemplate({});
       else setEditingPreset({ type: activeTab as 'main' | 'aux' });
   }
@@ -244,17 +244,31 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Main Scenario</label>
-                                    <select
-                                        value={editingSessionPreset?.mainPresetId || ''}
-                                        onChange={e => setEditingSessionPreset(prev => ({ ...prev, mainPresetId: e.target.value || null }))}
-                                        className="w-full bg-slate-50 dark:bg-[#1f1f1f] border border-slate-200 dark:border-[#333333] rounded-xl p-3 text-slate-900 dark:text-white outline-none font-medium"
-                                    >
-                                        <option value="">-- No Scenario (Empty) --</option>
-                                        {presets.filter(p => p.type === 'main').map(p => (
-                                            <option key={p.id} value={p.id}>{p.title}</option>
-                                        ))}
-                                    </select>
+                                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Main Agents (Multi-Select)</label>
+                                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-slate-50 dark:bg-[#1f1f1f] p-3 rounded-xl border border-slate-200 dark:border-[#333333] custom-scrollbar">
+                                        {presets.filter(p => p.type === 'main').map(p => {
+                                            const isSelected = editingSessionPreset?.mainPresetIds?.includes(p.id);
+                                            return (
+                                                <div 
+                                                    key={p.id}
+                                                    onClick={() => {
+                                                        const current = editingSessionPreset?.mainPresetIds || [];
+                                                        const newIds = isSelected 
+                                                            ? current.filter(id => id !== p.id)
+                                                            : [...current, p.id];
+                                                        setEditingSessionPreset(prev => ({ ...prev, mainPresetIds: newIds }));
+                                                    }}
+                                                    className={`p-2.5 rounded-lg cursor-pointer border text-xs font-bold transition-all ${
+                                                        isSelected 
+                                                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
+                                                        : 'bg-white dark:bg-[#252525] border-slate-200 dark:border-[#333333] text-slate-500 dark:text-slate-400 hover:border-slate-300'
+                                                    }`}
+                                                >
+                                                    <span className="truncate">{p.title}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Default Helpers</label>
@@ -273,7 +287,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                                     }}
                                                     className={`p-2.5 rounded-lg cursor-pointer border text-xs font-bold transition-all flex items-center justify-between ${
                                                         isSelected 
-                                                        ? 'bg-indigo-600 border-indigo-600 text-white' 
+                                                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' 
                                                         : 'bg-white dark:bg-[#252525] border-slate-200 dark:border-[#333333] text-slate-500 dark:text-slate-400 hover:border-slate-300'
                                                     }`}
                                                 >
