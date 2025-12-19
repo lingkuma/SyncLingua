@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Message } from "../types";
 
 // Initialize client with dynamic key
@@ -168,15 +168,29 @@ export const generateSpeech = async (
   existingContext?: AudioContext
 ): Promise<AudioBuffer> => {
   if (!apiKey) throw new Error("API Key missing");
+  if (!text || !text.trim()) {
+      // Return a silent buffer or throw. Returning a tiny silent buffer prevents UI crashes but 
+      // throwing is better for debugging. For now, throw but handle gracefully in UI.
+      throw new Error("Text content is empty");
+  }
   
   const ai = getClient(apiKey);
 
+  // Sanitize text: Remove common Markdown that might confuse the TTS model or is not speakable
+  // We keep it simple to avoid over-sanitizing
+  const cleanText = text.replace(/[*#`]/g, '').trim();
+
+  if (cleanText.length === 0) {
+      throw new Error("Text contains only unspeakable characters");
+  }
+
   // We use the specific TTS model
+  // Use 'AUDIO' string explicitly instead of Modality enum to avoid runtime issues
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: text }] }],
+    contents: [{ parts: [{ text: cleanText }] }],
     config: {
-      responseModalities: [Modality.AUDIO],
+      responseModalities: ['AUDIO'] as any,
       speechConfig: {
         voiceConfig: {
           prebuiltVoiceConfig: { voiceName: voiceName },
@@ -188,6 +202,12 @@ export const generateSpeech = async (
   const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
   if (!base64Audio) {
+    // If model returned text instead of audio (refusal/error context), it's often in parts[0].text
+    const textFallback = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (textFallback) {
+        console.warn("TTS Model returned text instead of audio:", textFallback);
+        throw new Error(`TTS generation refused: ${textFallback}`);
+    }
     throw new Error("No audio data returned from Gemini");
   }
 
