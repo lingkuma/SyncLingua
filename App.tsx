@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Menu, X } from 'lucide-react';
+import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github } from 'lucide-react';
 import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, DEFAULT_MODELS } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
@@ -105,6 +105,8 @@ const App: React.FC = () => {
   
   const [settings, setSettings] = useState<AppSettings>(() => {
       const saved = loadState<AppSettings | null>(STORAGE_KEYS.SETTINGS, null);
+      // Fallback to process.env.API_KEY if exists, but prioritize saved user key
+      // If process is undefined (browser), handle gracefully
       let envKey = '';
       try {
         if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
@@ -113,6 +115,7 @@ const App: React.FC = () => {
       } catch(e) {}
 
       if (saved) {
+          // If the user has a saved key, use it. If saved key is empty but env exists, use env.
           return {
               ...saved,
               apiKey: saved.apiKey || envKey
@@ -125,7 +128,7 @@ const App: React.FC = () => {
       };
   });
 
-  // Persistence Effects 
+  // Persistence Effects
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions)); }, [sessions]);
   useEffect(() => { 
       if (activeSessionId) localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(activeSessionId));
@@ -140,7 +143,6 @@ const App: React.FC = () => {
   // Modals & UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Custom Confirmation/Input Modal State
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -186,7 +188,6 @@ const App: React.FC = () => {
 
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
-    setIsMobileMenuOpen(false);
   };
 
   const createEmptySession = () => {
@@ -201,17 +202,13 @@ const App: React.FC = () => {
     };
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
-    setIsMobileMenuOpen(false);
   }
 
   const updateActiveSession = (updated: Session) => {
     setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
   };
 
-  const goHome = () => {
-      setActiveSessionId(null);
-      setIsMobileMenuOpen(false);
-  };
+  const goHome = () => setActiveSessionId(null);
 
   const promptDeleteSession = (e: React.MouseEvent, id: string) => {
       e.preventDefault();
@@ -243,9 +240,10 @@ const App: React.FC = () => {
       }
   }
 
+  // Import / Export Handlers
   const handleExportData = () => {
     const backupData = {
-        version: 2, 
+        version: 2, // Bump version
         timestamp: Date.now(),
         data: {
             sessions,
@@ -282,12 +280,14 @@ const App: React.FC = () => {
 
               const { sessions: newSessions, presets: newPresets, sessionPresets: newSP, settings: newSettings, systemTemplates: newTemplates } = parsed.data;
 
+              // Update state with imported data
               if (Array.isArray(newSessions)) setSessions(newSessions);
               if (Array.isArray(newPresets)) setPresets(newPresets);
               if (Array.isArray(newSP)) setSessionPresets(newSP);
               if (Array.isArray(newTemplates)) setSystemTemplates(newTemplates);
               if (newSettings) setSettings(newSettings);
 
+              // Reset active session to null to avoid ID mismatches
               setActiveSessionId(null);
               setIsSettingsOpen(false);
               
@@ -302,40 +302,20 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className="flex h-screen w-screen bg-slate-950 text-slate-100 font-sans">
       
-      {/* MOBILE OVERLAY */}
-      {isMobileMenuOpen && (
-        <div 
-            className="fixed inset-0 bg-black/70 z-40 md:hidden backdrop-blur-sm"
-            onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* SIDEBAR (Responsive) */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-slate-925 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
-        md:relative md:translate-x-0 md:w-64 md:flex-shrink-0
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+      {/* SIDEBAR */}
+      <div className="w-64 flex flex-col border-r border-slate-800 bg-slate-925 flex-shrink-0">
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-            <div 
-                onClick={goHome}
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-            >
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-900/20">
-                    <MessageSquare size={18} className="text-white" />
-                </div>
-                <h1 className="font-bold text-lg tracking-tight text-slate-100">SyncLingua</h1>
+        <div 
+            onClick={goHome}
+            className="p-4 border-b border-slate-800 flex items-center gap-2 cursor-pointer hover:bg-slate-900 transition-colors"
+            title="Go to Dashboard"
+        >
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-900/20">
+                <MessageSquare size={18} className="text-white" />
             </div>
-            {/* Close button only visible on mobile */}
-            <button 
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="md:hidden text-slate-400 hover:text-white"
-            >
-                <X size={24} />
-            </button>
+            <h1 className="font-bold text-lg tracking-tight text-slate-100">SyncLingua</h1>
         </div>
 
         {/* Navigation */}
@@ -352,7 +332,7 @@ const App: React.FC = () => {
             </button>
 
             <button 
-                onClick={() => { setIsLibraryOpen(true); setIsMobileMenuOpen(false); }}
+                onClick={() => setIsLibraryOpen(true)}
                 className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200"
             >
                 <Book size={18} /> Library
@@ -378,8 +358,9 @@ const App: React.FC = () => {
                         : 'border-transparent hover:bg-slate-900 text-slate-400 hover:text-slate-200'
                     }`}
                 >
+                    {/* Main Click Target for Selection */}
                     <div 
-                        onClick={() => { setActiveSessionId(s.id); setIsMobileMenuOpen(false); }}
+                        onClick={() => setActiveSessionId(s.id)}
                         className="p-3 pr-20 cursor-pointer select-none relative z-0" 
                     >
                         <div className={`font-medium truncate text-sm ${activeSessionId === s.id ? 'text-white' : 'text-current'}`}>
@@ -390,6 +371,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                     
+                    {/* Action Buttons */}
                     <div 
                         className={`absolute right-2 top-2 flex gap-1 z-10 ${
                             activeSessionId === s.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
@@ -399,6 +381,7 @@ const App: React.FC = () => {
                             type="button"
                             onClick={(e) => promptRenameSession(e, s.id)} 
                             className="flex items-center justify-center w-7 h-7 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors shadow-sm border border-slate-700/50 cursor-pointer pointer-events-auto"
+                            title="Rename"
                         >
                             <Pencil size={14} />
                         </button>
@@ -406,6 +389,7 @@ const App: React.FC = () => {
                             type="button"
                             onClick={(e) => promptDeleteSession(e, s.id)} 
                             className="flex items-center justify-center w-7 h-7 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition-colors shadow-sm border border-slate-700/50 cursor-pointer pointer-events-auto"
+                            title="Delete"
                         >
                             <Trash2 size={14} />
                         </button>
@@ -414,7 +398,7 @@ const App: React.FC = () => {
             ))}
             {sessions.length === 0 && (
                 <div className="p-4 text-center text-slate-600 text-xs italic">
-                    No history.
+                    No history. Start a new session from Dashboard.
                 </div>
             )}
         </div>
@@ -422,7 +406,7 @@ const App: React.FC = () => {
         {/* Footer Settings */}
         <div className="p-4 border-t border-slate-800">
             <button 
-                onClick={() => { setIsSettingsOpen(true); setIsMobileMenuOpen(false); }}
+                onClick={() => setIsSettingsOpen(true)}
                 className="flex items-center gap-3 text-slate-400 hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-slate-800"
             >
                 <Settings size={20} />
@@ -431,82 +415,66 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 h-full relative bg-slate-950">
-        
-        {/* Mobile Header */}
-        <div className="md:hidden h-14 border-b border-slate-800 flex items-center px-4 bg-slate-925 sticky top-0 z-30 flex-shrink-0">
-            <button 
-                onClick={() => setIsMobileMenuOpen(true)}
-                className="p-2 -ml-2 text-slate-400 hover:text-white rounded-lg active:bg-slate-800"
-            >
-                <Menu size={24} />
-            </button>
-            <div className="ml-2 font-semibold text-slate-200 truncate">
-                {activeSession ? activeSession.title : 'Dashboard'}
-            </div>
-        </div>
-
-        <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-            {activeSession ? (
-                <ChatInterface 
-                    session={activeSession}
-                    updateSession={updateActiveSession}
-                    auxPresets={auxPresets}
-                    systemTemplates={systemTemplates}
-                    settings={settings}
-                    mainPreset={activeMainPreset}
-                />
-            ) : (
-                // DASHBOARD VIEW
-                <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
-                    <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-indigo-900/10">
-                        <MessageSquare size={32} className="text-indigo-500" />
-                    </div>
-                    <h2 className="text-2xl md:text-3xl font-bold text-slate-200 mb-3 tracking-tight text-center">SyncLingua Studio</h2>
-                    <p className="max-w-md text-center mb-10 text-slate-500 text-lg">
-                        Choose a template to start a new synchronized multi-model session.
-                    </p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-5xl">
-                        {/* New Empty Card */}
-                        <button 
-                            onClick={createEmptySession}
-                            className="flex flex-col items-center justify-center p-6 bg-slate-900/50 border border-slate-800 border-dashed hover:border-indigo-500/50 hover:bg-slate-900 rounded-xl transition-all group h-48"
-                        >
-                            <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                                <Plus size={24} className="text-slate-400 group-hover:text-indigo-400" />
-                            </div>
-                            <h3 className="font-semibold text-slate-300">Empty Session</h3>
-                            <p className="text-sm text-slate-600 mt-1">Start from scratch</p>
-                        </button>
-
-                        {/* Presets */}
-                        {sessionPresets.map(sp => (
-                            <button 
-                                key={sp.id}
-                                onClick={() => createSession(sp.id)}
-                                className="flex flex-col text-left p-6 bg-slate-900 border border-slate-800 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-900/10 rounded-xl transition-all group h-48 relative overflow-hidden"
-                            >
-                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <LayoutGrid size={64} />
-                                </div>
-                                <h3 className="font-semibold text-xl text-slate-200 group-hover:text-indigo-400 mb-2">{sp.title}</h3>
-                                <div className="flex-1">
-                                    <p className="text-sm text-slate-500 line-clamp-2">
-                                        Main: <span className="text-slate-400">{presets.find(p => p.id === sp.mainPresetId)?.title || 'Custom'}</span>
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2 mt-4 text-xs font-medium text-slate-600 bg-slate-950/50 p-2 rounded-lg w-fit">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    {sp.defaultAuxPresetIds.length} Active Helpers
-                                </div>
-                            </button>
-                        ))}
-                    </div>
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-950">
+        {activeSession ? (
+            <ChatInterface 
+                session={activeSession}
+                updateSession={updateActiveSession}
+                auxPresets={auxPresets}
+                systemTemplates={systemTemplates}
+                settings={settings}
+                mainPreset={activeMainPreset}
+            />
+        ) : (
+            // DASHBOARD VIEW
+            <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
+                <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-indigo-900/10">
+                    <MessageSquare size={32} className="text-indigo-500" />
                 </div>
-            )}
-        </div>
+                <h2 className="text-3xl font-bold text-slate-200 mb-3 tracking-tight">SyncLingua Studio</h2>
+                <p className="max-w-md text-center mb-10 text-slate-500 text-lg">
+                    Choose a template to start a new synchronized multi-model session.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-5xl">
+                    {/* New Empty Card */}
+                    <button 
+                         onClick={createEmptySession}
+                         className="flex flex-col items-center justify-center p-6 bg-slate-900/50 border border-slate-800 border-dashed hover:border-indigo-500/50 hover:bg-slate-900 rounded-xl transition-all group h-48"
+                    >
+                        <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <Plus size={24} className="text-slate-400 group-hover:text-indigo-400" />
+                        </div>
+                        <h3 className="font-semibold text-slate-300">Empty Session</h3>
+                        <p className="text-sm text-slate-600 mt-1">Start from scratch</p>
+                    </button>
+
+                    {/* Presets */}
+                    {sessionPresets.map(sp => (
+                        <button 
+                            key={sp.id}
+                            onClick={() => createSession(sp.id)}
+                            className="flex flex-col text-left p-6 bg-slate-900 border border-slate-800 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-900/10 rounded-xl transition-all group h-48 relative overflow-hidden"
+                        >
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                <LayoutGrid size={64} />
+                            </div>
+                            <h3 className="font-semibold text-xl text-slate-200 group-hover:text-indigo-400 mb-2">{sp.title}</h3>
+                            <div className="flex-1">
+                                <p className="text-sm text-slate-500 line-clamp-2">
+                                    Main: <span className="text-slate-400">{presets.find(p => p.id === sp.mainPresetId)?.title || 'Custom'}</span>
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-4 text-xs font-medium text-slate-600 bg-slate-950/50 p-2 rounded-lg w-fit">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                {sp.defaultAuxPresetIds.length} Active Helpers
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )}
       </div>
 
       {/* MODALS */}
