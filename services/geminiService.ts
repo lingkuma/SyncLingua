@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
 import { Message } from "../types";
 
 // Initialize client with dynamic key
@@ -169,66 +169,85 @@ export const generateSpeech = async (
 ): Promise<AudioBuffer> => {
   if (!apiKey) throw new Error("API Key missing");
   if (!text || !text.trim()) {
-      // Return a silent buffer or throw. Returning a tiny silent buffer prevents UI crashes but 
-      // throwing is better for debugging. For now, throw but handle gracefully in UI.
       throw new Error("Text content is empty");
   }
   
   const ai = getClient(apiKey);
 
-  // Sanitize text: Remove common Markdown that might confuse the TTS model or is not speakable
-  // We keep it simple to avoid over-sanitizing
-  const cleanText = text.replace(/[*#`]/g, '').trim();
+  // Sanitize text: Remove common Markdown that might confuse the TTS model
+  // Also remove code blocks and other non-speakable structures
+  let cleanText = text
+    .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+    .replace(/`[^`]*`/g, '')        // Remove inline code
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Extract link text
+    .replace(/[*#_]/g, '')          // Remove formatting chars
+    .replace(/^\s*>.*$/gm, '')      // Remove blockquotes
+    .trim();
+
+  // If text is extremely long, truncate to avoid errors (approx 4000 chars safety limit)
+  if (cleanText.length > 4000) {
+    cleanText = cleanText.substring(0, 4000);
+  }
 
   if (cleanText.length === 0) {
-      throw new Error("Text contains only unspeakable characters");
+      throw new Error("Text contains only unspeakable characters or code");
   }
 
-  // We use the specific TTS model
-  // Use 'AUDIO' string explicitly instead of Modality enum to avoid runtime issues
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: cleanText }] }],
-    config: {
-      responseModalities: ['AUDIO'] as any,
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: voiceName },
+  try {
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: cleanText }] }],
+        config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+            voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voiceName },
+            },
         },
-      },
-    },
-  });
+        },
+    });
 
-  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
-  if (!base64Audio) {
-    // If model returned text instead of audio (refusal/error context), it's often in parts[0].text
-    const textFallback = response.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (textFallback) {
-        console.warn("TTS Model returned text instead of audio:", textFallback);
-        throw new Error(`TTS generation refused: ${textFallback}`);
+    if (!base64Audio) {
+        // If model returned text instead of audio (refusal/error context), it's often in parts[0].text
+        const textFallback = response.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (textFallback) {
+            console.warn("TTS Model returned text instead of audio:", textFallback);
+            throw new Error(`TTS generation refused: ${textFallback}`);
+        }
+        throw new Error("No audio data returned from Gemini");
     }
-    throw new Error("No audio data returned from Gemini");
-  }
 
-  // Decode audio
-  const pcmData = decodeBase64(base64Audio);
-  
-  // Use provided context or create a temporary one for buffer creation
-  // Note: AudioBuffers can typically be shared, but creating one requires a context (BaseAudioContext)
-  let audioContext = existingContext;
-  let shouldCloseContext = false;
+    // Decode audio
+    const pcmData = decodeBase64(base64Audio);
+    
+    // Use provided context or create a temporary one for buffer creation
+    let audioContext = existingContext;
+    let shouldCloseContext = false;
 
-  if (!audioContext) {
-      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      shouldCloseContext = true;
-  }
-  
-  const audioBuffer = pcmToAudioBuffer(pcmData, audioContext, 24000);
-  
-  if (shouldCloseContext && audioContext.state !== 'closed') {
-      await audioContext.close();
-  }
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        shouldCloseContext = true;
+    }
+    
+    const audioBuffer = pcmToAudioBuffer(pcmData, audioContext, 24000);
+    
+    if (shouldCloseContext && audioContext.state !== 'closed') {
+        await audioContext.close();
+    }
 
-  return audioBuffer;
+    return audioBuffer;
+
+  } catch (error: any) {
+    console.error("Gemini TTS API Error:", error);
+    // Handle the specific "model returned non-audio response" 400 error
+    if (error.message && (
+        error.message.includes("model returned non-audio response") || 
+        error.message.includes("prompt is not supported by the AudioOut model")
+    )) {
+        throw new Error("TTS Failed: The model refused to speak this text (Safety/Policy).");
+    }
+    throw error;
+  }
 };
