@@ -125,7 +125,7 @@ const App: React.FC = () => {
       };
   });
 
-  // Persistence Effects
+  // Persistence Effects 
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions)); }, [sessions]);
   useEffect(() => { 
       if (activeSessionId) localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(activeSessionId));
