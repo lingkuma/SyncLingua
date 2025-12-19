@@ -201,8 +201,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       };
       
       // Update global session state 
+      // CRITICAL FIX: Explicitly include 'mainHistory' to ensure the Main AI message (generated just before this)
+      // is not lost if 'sessionRef.current' is slightly stale due to React batching/timing.
       const sessionWithTrigger = {
           ...sessionRef.current,
+          mainMessages: mainHistory,
           auxTabs: sessionRef.current.auxTabs.map(t => t.id === tab.id ? currentTab : t)
       };
       updateSession(sessionWithTrigger);
@@ -313,7 +316,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             (chunk) => {
                 currentBotText += chunk;
                 updateSession({
-                    ...session, // This might be slightly stale if typing very fast, but usually fine for main chat
+                    ...sessionRef.current, // Use ref to ensure we don't overwrite concurrent changes (like aux tabs closing)
                     mainMessages: [
                         ...updatedMessages,
                         { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
