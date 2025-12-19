@@ -27,24 +27,26 @@ const MessageBubble: React.FC<{
 
     return (
       <div className={`flex gap-3 mb-4 group ${msg.role === 'user' ? 'flex-row-reverse' : ''} ${opacityClass}`}>
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
             msg.role === 'user' 
             ? (msg.isAutoTrigger ? 'bg-amber-600/80' : 'bg-indigo-600') 
             : 'bg-emerald-600'
         }`}>
             {msg.role === 'user' ? (
-                msg.isAutoTrigger ? <Zap size={16} className="text-white fill-white" /> : <User size={16} />
-            ) : <Bot size={16} />}
+                msg.isAutoTrigger ? <Zap size={16} className="text-white fill-white" /> : <User size={16} className="text-white" />
+            ) : <Bot size={16} className="text-white" />}
         </div>
         
         <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
             {msg.isAutoTrigger && msg.role === 'user' && (
-                 <div className="text-[10px] text-amber-500/80 mb-1 uppercase tracking-wider font-bold">Auto Trigger</div>
+                 <div className="text-[10px] text-amber-600 dark:text-amber-500/80 mb-1 uppercase tracking-wider font-bold">Auto Trigger</div>
             )}
             <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user' 
-                ? (msg.isAutoTrigger ? 'bg-slate-800/50 border border-amber-900/30 text-slate-300 italic' : 'bg-slate-800 text-slate-100')
-                : 'bg-slate-900/80 border border-slate-700 text-slate-200 shadow-sm'
+                ? (msg.isAutoTrigger 
+                    ? 'bg-amber-50 dark:bg-slate-800/50 border border-amber-900/10 dark:border-amber-900/30 text-amber-900 dark:text-slate-300 italic' 
+                    : 'bg-indigo-600 dark:bg-slate-800 text-white dark:text-slate-100')
+                : 'bg-white dark:bg-neutral-900/80 border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-200 shadow-sm'
             } ${msg.role === 'user' ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
                 {msg.text}
             </div>
@@ -56,8 +58,8 @@ const MessageBubble: React.FC<{
                 <button 
                     onClick={() => onPlayTTS(msg.text, msg.id)}
                     disabled={isLoadingTTS}
-                    className={`p-1.5 rounded-md hover:bg-slate-800 transition-colors ${
-                        isPlaying ? 'text-indigo-400 bg-slate-800' : 'text-slate-500 hover:text-indigo-300'
+                    className={`p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-slate-800 transition-colors ${
+                        isPlaying ? 'text-indigo-500 dark:text-indigo-400 bg-gray-200 dark:bg-slate-800' : 'text-gray-500 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300'
                     }`}
                     title="Read Aloud"
                 >
@@ -81,6 +83,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   const [isGeneratingMain, setIsGeneratingMain] = useState(false);
   const [isGeneratingAux, setIsGeneratingAux] = useState(false);
   
+  // Mobile View Toggle
+  const [mobileView, setMobileView] = useState<'main' | 'aux'>('main');
+
   // Track individual Aux tabs generating status (for auto triggers)
   const [auxGeneratingIds, setAuxGeneratingIds] = useState<Set<string>>(new Set());
 
@@ -104,8 +109,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
     ref.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => scrollToBottom(mainEndRef), [session.mainMessages]);
-  useEffect(() => scrollToBottom(auxEndRef), [session.auxTabs, session.activeAuxTabId]);
+  useEffect(() => scrollToBottom(mainEndRef), [session.mainMessages, mobileView]);
+  useEffect(() => scrollToBottom(auxEndRef), [session.auxTabs, session.activeAuxTabId, mobileView]);
 
   // Clean up audio on unmount
   useEffect(() => {
@@ -466,222 +471,255 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   const [showAuxAdder, setShowAuxAdder] = useState(false);
 
   return (
-    <div className="flex h-full w-full bg-slate-950 overflow-hidden">
-        {/* LEFT PANE: MAIN CHAT */}
-        <div className="w-1/2 flex flex-col border-r border-slate-800">
-            <div className="h-14 border-b border-slate-800 flex items-center px-4 bg-slate-900/50 justify-between">
-                <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                    <h3 className="font-semibold text-slate-200">
-                        {mainPreset ? mainPreset.title : 'Main Conversation'}
-                    </h3>
-                </div>
-                <div className="flex items-center gap-3">
-                     {!settings.apiKey && (
-                        <div className="flex items-center gap-1 text-amber-500 text-xs font-bold animate-pulse" title="API Key missing in Settings">
-                            <TriangleAlert size={14} />
-                            <span>No API Key</span>
-                        </div>
-                     )}
-                    <div className="text-xs text-slate-500 px-2 py-1 bg-slate-800 rounded">
-                        {session.mainMessages.length} msgs
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                {session.mainMessages.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-2">
-                        <Layers size={48} className="opacity-20" />
-                        <p className="text-sm">Start the conversation...</p>
-                        {!settings.apiKey && <p className="text-xs text-amber-500">Please set API Key in settings.</p>}
-                    </div>
-                )}
-                {session.mainMessages.map(m => (
-                    <MessageBubble 
-                        key={m.id} 
-                        msg={m} 
-                        onPlayTTS={handleTTS}
-                        isPlaying={playingMessageId === m.id}
-                        isLoadingTTS={loadingTTSId === m.id}
-                    />
-                ))}
-                <div ref={mainEndRef} />
-            </div>
-
-            <div className="p-4 bg-slate-900 border-t border-slate-800">
-                <div className="flex gap-2 relative">
-                    <input
-                        className="flex-1 bg-slate-800 text-slate-100 placeholder-slate-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-slate-700"
-                        placeholder={mainPreset ? `Speak in context of: ${mainPreset.title}...` : "Type a message..."}
-                        value={inputMain}
-                        onChange={e => setInputMain(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && sendMainMessage()}
-                        disabled={isGeneratingMain}
-                    />
-                    <button 
-                        onClick={sendMainMessage}
-                        disabled={isGeneratingMain || !inputMain.trim()}
-                        className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white p-3 rounded-lg transition-colors"
-                    >
-                        <Send size={20} />
-                    </button>
-                </div>
-            </div>
+    <div className="flex flex-col h-full w-full bg-white dark:bg-neutral-950 overflow-hidden">
+        {/* MOBILE TABS SWITCHER */}
+        <div className="md:hidden flex border-b border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shrink-0">
+            <button 
+                onClick={() => setMobileView('main')}
+                className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    mobileView === 'main' 
+                    ? 'border-indigo-600 text-indigo-600 dark:text-white dark:border-white' 
+                    : 'border-transparent text-gray-500 dark:text-gray-500'
+                }`}
+            >
+                Main Chat
+            </button>
+            <button 
+                onClick={() => setMobileView('aux')}
+                className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    mobileView === 'aux' 
+                    ? 'border-indigo-600 text-indigo-600 dark:text-white dark:border-white' 
+                    : 'border-transparent text-gray-500 dark:text-gray-500'
+                }`}
+            >
+                Aux Tools {auxGeneratingIds.size > 0 && <span className="text-indigo-500 animate-pulse">●</span>}
+            </button>
         </div>
 
-        {/* RIGHT PANE: AUX CHAT */}
-        <div className="w-1/2 flex flex-col bg-slate-950">
-             {/* AUX TABS HEADER */}
-             <div className="h-14 border-b border-slate-800 flex items-center bg-slate-900/30 overflow-x-auto custom-scrollbar">
-                {session.auxTabs.map(tab => {
-                    const preset = auxPresets.find(p => p.id === tab.presetId);
-                    const isGenerating = auxGeneratingIds.has(tab.id);
-                    return (
-                        <div 
-                            key={tab.id}
-                            onClick={() => updateSession({ ...session, activeAuxTabId: tab.id })}
-                            className={`group flex items-center gap-2 px-4 h-full text-sm font-medium border-r border-slate-800 cursor-pointer min-w-[140px] max-w-[200px] select-none relative ${
-                                session.activeAuxTabId === tab.id 
-                                ? 'bg-slate-900 text-indigo-400 border-b-2 border-b-indigo-500' 
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/50'
-                            }`}
-                        >
-                            {/* Auto Trigger Indicator on Tab */}
-                            {preset?.autoTrigger && (
-                                <Zap size={10} className="text-amber-500 fill-amber-500 absolute top-1.5 right-1.5" />
-                            )}
-                            
-                            <span className="truncate flex-1 flex items-center gap-2">
-                                {isGenerating && <Loader2 size={12} className="animate-spin text-indigo-500" />}
-                                {preset?.title || 'Unknown'}
-                            </span>
-                            <button 
-                                onClick={(e) => handleCloseAuxTab(tab.id, e)}
-                                className="opacity-0 group-hover:opacity-100 hover:text-red-400 p-1"
-                            >
-                                <X size={12} />
-                            </button>
+        <div className="flex flex-1 overflow-hidden relative">
+            
+            {/* LEFT PANE: MAIN CHAT */}
+            {/* Logic: Hidden on mobile if view is 'aux', Visible on Desktop always */}
+            <div className={`w-full md:w-1/2 flex flex-col border-r border-gray-200 dark:border-neutral-800 ${
+                mobileView === 'aux' ? 'hidden md:flex' : 'flex'
+            }`}>
+                <div className="h-14 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 bg-gray-50/80 dark:bg-neutral-900/50 justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                        <h3 className="font-semibold text-gray-800 dark:text-gray-200 truncate">
+                            {mainPreset ? mainPreset.title : 'Main Conversation'}
+                        </h3>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                        {!settings.apiKey && (
+                            <div className="flex items-center gap-1 text-amber-500 text-xs font-bold animate-pulse" title="API Key missing in Settings">
+                                <TriangleAlert size={14} />
+                                <span className="hidden sm:inline">No API Key</span>
+                            </div>
+                        )}
+                        <div className="text-xs text-gray-500 dark:text-gray-500 px-2 py-1 bg-gray-200 dark:bg-neutral-800 rounded">
+                            {session.mainMessages.length} msgs
                         </div>
-                    );
-                })}
-                
-                <div className="relative h-full flex items-center px-2">
-                    <button 
-                        onClick={() => setShowAuxAdder(!showAuxAdder)}
-                        className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                    >
-                        <Plus size={18} />
-                    </button>
-                    
-                    {showAuxAdder && (
-                        <div className="absolute top-12 left-0 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 overflow-hidden">
-                             <div className="p-2 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-900/50">Add Helper</div>
-                             <div className="max-h-64 overflow-y-auto">
-                                {auxPresets.map(p => (
-                                    <button
-                                        key={p.id}
-                                        onClick={() => { handleAddAuxTab(p.id); setShowAuxAdder(false); }}
-                                        className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors border-b border-slate-700/50 last:border-0 flex justify-between items-center"
-                                    >
-                                        {p.title}
-                                        {p.autoTrigger && <Zap size={12} className="text-amber-400 fill-amber-400" />}
-                                    </button>
-                                ))}
-                                {auxPresets.length === 0 && (
-                                    <div className="p-4 text-center text-xs text-slate-500">No aux presets found. Create one in Library.</div>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white dark:bg-neutral-950">
+                    {session.mainMessages.length === 0 && (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 space-y-2">
+                            <Layers size={48} className="opacity-20" />
+                            <p className="text-sm">Start the conversation...</p>
+                            {!settings.apiKey && <p className="text-xs text-amber-500">Please set API Key in settings.</p>}
+                        </div>
+                    )}
+                    {session.mainMessages.map(m => (
+                        <MessageBubble 
+                            key={m.id} 
+                            msg={m} 
+                            onPlayTTS={handleTTS}
+                            isPlaying={playingMessageId === m.id}
+                            isLoadingTTS={loadingTTSId === m.id}
+                        />
+                    ))}
+                    <div ref={mainEndRef} />
+                </div>
+
+                <div className="p-4 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800">
+                    <div className="flex gap-2 relative">
+                        <input
+                            className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors"
+                            placeholder={mainPreset ? `Speak in context of: ${mainPreset.title}...` : "Type a message..."}
+                            value={inputMain}
+                            onChange={e => setInputMain(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && sendMainMessage()}
+                            disabled={isGeneratingMain}
+                        />
+                        <button 
+                            onClick={sendMainMessage}
+                            disabled={isGeneratingMain || !inputMain.trim()}
+                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors"
+                        >
+                            <Send size={20} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* RIGHT PANE: AUX CHAT */}
+            {/* Logic: Hidden on mobile if view is 'main', Visible on Desktop always */}
+            <div className={`w-full md:w-1/2 flex flex-col bg-gray-50 dark:bg-neutral-950 ${
+                mobileView === 'main' ? 'hidden md:flex' : 'flex'
+            }`}>
+                {/* AUX TABS HEADER */}
+                <div className="h-14 border-b border-gray-200 dark:border-neutral-800 flex items-center bg-gray-100 dark:bg-neutral-900/30 overflow-x-auto custom-scrollbar shrink-0">
+                    {session.auxTabs.map(tab => {
+                        const preset = auxPresets.find(p => p.id === tab.presetId);
+                        const isGenerating = auxGeneratingIds.has(tab.id);
+                        return (
+                            <div 
+                                key={tab.id}
+                                onClick={() => updateSession({ ...session, activeAuxTabId: tab.id })}
+                                className={`group flex items-center gap-2 px-4 h-full text-sm font-medium border-r border-gray-200 dark:border-neutral-800 cursor-pointer min-w-[140px] max-w-[200px] select-none relative ${
+                                    session.activeAuxTabId === tab.id 
+                                    ? 'bg-white dark:bg-neutral-900 text-indigo-600 dark:text-indigo-400 border-b-2 border-b-indigo-500' 
+                                    : 'text-gray-500 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-900/50'
+                                }`}
+                            >
+                                {/* Auto Trigger Indicator on Tab */}
+                                {preset?.autoTrigger && (
+                                    <Zap size={10} className="text-amber-500 fill-amber-500 absolute top-1.5 right-1.5" />
                                 )}
-                             </div>
+                                
+                                <span className="truncate flex-1 flex items-center gap-2">
+                                    {isGenerating && <Loader2 size={12} className="animate-spin text-indigo-500" />}
+                                    {preset?.title || 'Unknown'}
+                                </span>
+                                <button 
+                                    onClick={(e) => handleCloseAuxTab(tab.id, e)}
+                                    className="opacity-0 group-hover:opacity-100 hover:text-red-500 p-1"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        );
+                    })}
+                    
+                    <div className="relative h-full flex items-center px-2">
+                        <button 
+                            onClick={() => setShowAuxAdder(!showAuxAdder)}
+                            className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-neutral-800 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                        >
+                            <Plus size={18} />
+                        </button>
+                        
+                        {showAuxAdder && (
+                            <div className="absolute top-12 left-0 w-64 bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg shadow-xl z-20 overflow-hidden">
+                                <div className="p-2 text-xs font-semibold text-gray-500 dark:text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-neutral-900/50">Add Helper</div>
+                                <div className="max-h-64 overflow-y-auto">
+                                    {auxPresets.map(p => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => { handleAddAuxTab(p.id); setShowAuxAdder(false); }}
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-indigo-600 hover:text-white transition-colors border-b border-gray-100 dark:border-neutral-700/50 last:border-0 flex justify-between items-center"
+                                        >
+                                            {p.title}
+                                            {p.autoTrigger && <Zap size={12} className="text-amber-400 fill-amber-400" />}
+                                        </button>
+                                    ))}
+                                    {auxPresets.length === 0 && (
+                                        <div className="p-4 text-center text-xs text-gray-400">No aux presets found. Create one in Library.</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* AUX CHAT AREA */}
+                <div className="flex-1 flex flex-col min-h-0 bg-gray-50 dark:bg-neutral-925/50">
+                    {activeAuxTab ? (
+                        <>
+                            {/* TOOLBAR */}
+                            <div className="h-10 border-b border-gray-200 dark:border-neutral-800/50 flex items-center justify-between px-4 bg-gray-100/50 dark:bg-neutral-900/30 shrink-0">
+                                <div className="text-xs text-gray-500 flex items-center gap-1">
+                                    {activeAuxPreset?.autoTrigger ? (
+                                        <>
+                                            <Zap size={12} className="text-amber-500" />
+                                            <span className="text-amber-600 dark:text-amber-500 font-medium">Auto-Responds to AI</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="text-emerald-500">●</span> Monitoring Context
+                                        </>
+                                    )}
+                                </div>
+                                <button 
+                                    onClick={clearAuxContext}
+                                    title="Clear history for this helper (keeps context)"
+                                    className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2 py-1 hover:bg-gray-200 dark:hover:bg-neutral-800 rounded transition-colors"
+                                >
+                                    <RefreshCw size={12} /> Clear Memory
+                                </button>
+                            </div>
+
+                            {/* MESSAGES */}
+                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                {activeAuxTab.messages.length === 0 && (
+                                    <div className="mt-10 text-center text-gray-500 dark:text-gray-600 text-sm px-8">
+                                        <p className="mb-2 font-medium text-gray-400 dark:text-gray-500">{activeAuxPreset?.title}</p>
+                                        <p>{activeAuxPreset?.autoTrigger 
+                                            ? "I will automatically analyze every new AI response." 
+                                            : "Ask me anything about the conversation on the left."}
+                                        </p>
+                                        {mainPreset?.sharedPrompt && (
+                                            <div className="mt-4 p-3 bg-gray-100 dark:bg-neutral-800/50 rounded-lg text-xs border border-gray-200 dark:border-neutral-700/50 text-gray-500 dark:text-gray-400">
+                                                <div className="font-bold text-emerald-600 dark:text-emerald-500 mb-1 uppercase tracking-wider">Context Aware</div>
+                                                I know that: {mainPreset.sharedPrompt}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {activeAuxTab.messages.map((m, idx, arr) => (
+                                    <MessageBubble 
+                                        key={m.id} 
+                                        msg={m} 
+                                        onPlayTTS={handleTTS} 
+                                        isPlaying={playingMessageId === m.id}
+                                        isLoadingTTS={loadingTTSId === m.id}
+                                        isLastInGroup={idx >= arr.length - 2} // Crude approximation for "last interaction"
+                                    />
+                                ))}
+                                <div ref={auxEndRef} />
+                            </div>
+
+                            {/* INPUT */}
+                            <div className="p-4 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800">
+                                <div className="flex gap-2">
+                                    <input
+                                        className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors"
+                                        placeholder={activeAuxPreset?.autoTrigger ? "Manually ask specific question..." : `Ask ${activeAuxPreset?.title || 'helper'}...`}
+                                        value={inputAux}
+                                        onChange={e => setInputAux(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && sendAuxMessage()}
+                                        disabled={isGeneratingAux}
+                                    />
+                                    <button 
+                                        onClick={sendAuxMessage}
+                                        disabled={isGeneratingAux || !inputAux.trim()}
+                                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors"
+                                    >
+                                        <Send size={20} />
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
+                            <Layers size={64} className="mb-4 text-gray-300 dark:text-gray-700" />
+                            <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400">No Helper Selected</h3>
+                            <p className="text-sm mt-2">Open a new tab (+) to add a language tool.</p>
                         </div>
                     )}
                 </div>
-            </div>
-
-            {/* AUX CHAT AREA */}
-            <div className="flex-1 flex flex-col min-h-0 bg-slate-900/20">
-                {activeAuxTab ? (
-                    <>
-                        {/* TOOLBAR */}
-                        <div className="h-10 border-b border-slate-800/50 flex items-center justify-between px-4 bg-slate-900/30">
-                             <div className="text-xs text-slate-500 flex items-center gap-1">
-                                {activeAuxPreset?.autoTrigger ? (
-                                    <>
-                                        <Zap size={12} className="text-amber-500" />
-                                        <span className="text-amber-500 font-medium">Auto-Responds to AI</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="text-emerald-500">●</span> Monitoring Context
-                                    </>
-                                )}
-                             </div>
-                             <button 
-                                onClick={clearAuxContext}
-                                title="Clear history for this helper (keeps context)"
-                                className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-2 py-1 hover:bg-slate-800 rounded transition-colors"
-                             >
-                                <RefreshCw size={12} /> Clear Memory
-                             </button>
-                        </div>
-
-                        {/* MESSAGES */}
-                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                             {activeAuxTab.messages.length === 0 && (
-                                <div className="mt-10 text-center text-slate-600 text-sm px-8">
-                                    <p className="mb-2 font-medium text-slate-500">{activeAuxPreset?.title}</p>
-                                    <p>{activeAuxPreset?.autoTrigger 
-                                        ? "I will automatically analyze every new AI response." 
-                                        : "Ask me anything about the conversation on the left."}
-                                    </p>
-                                    {mainPreset?.sharedPrompt && (
-                                        <div className="mt-4 p-3 bg-slate-800/50 rounded-lg text-xs border border-slate-700/50 text-slate-400">
-                                            <div className="font-bold text-emerald-500 mb-1 uppercase tracking-wider">Context Aware</div>
-                                            I know that: {mainPreset.sharedPrompt}
-                                        </div>
-                                    )}
-                                </div>
-                             )}
-                             {activeAuxTab.messages.map((m, idx, arr) => (
-                                <MessageBubble 
-                                    key={m.id} 
-                                    msg={m} 
-                                    onPlayTTS={handleTTS} 
-                                    isPlaying={playingMessageId === m.id}
-                                    isLoadingTTS={loadingTTSId === m.id}
-                                    isLastInGroup={idx >= arr.length - 2} // Crude approximation for "last interaction"
-                                />
-                             ))}
-                             <div ref={auxEndRef} />
-                        </div>
-
-                        {/* INPUT */}
-                        <div className="p-4 bg-slate-900 border-t border-slate-800">
-                            <div className="flex gap-2">
-                                <input
-                                    className="flex-1 bg-slate-800 text-slate-100 placeholder-slate-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-600/50 outline-none border border-slate-700"
-                                    placeholder={activeAuxPreset?.autoTrigger ? "Manually ask specific question..." : `Ask ${activeAuxPreset?.title || 'helper'}...`}
-                                    value={inputAux}
-                                    onChange={e => setInputAux(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && sendAuxMessage()}
-                                    disabled={isGeneratingAux}
-                                />
-                                <button 
-                                    onClick={sendAuxMessage}
-                                    disabled={isGeneratingAux || !inputAux.trim()}
-                                    className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white p-3 rounded-lg transition-colors"
-                                >
-                                    <Send size={20} />
-                                </button>
-                            </div>
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
-                        <Layers size={64} className="mb-4 text-slate-700" />
-                        <h3 className="text-lg font-medium text-slate-400">No Helper Selected</h3>
-                        <p className="text-sm mt-2">Open a new tab (+) to add a language tool.</p>
-                    </div>
-                )}
             </div>
         </div>
     </div>

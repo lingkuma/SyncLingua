@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github } from 'lucide-react';
+import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu } from 'lucide-react';
 import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, DEFAULT_MODELS } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
@@ -118,15 +118,48 @@ const App: React.FC = () => {
           // If the user has a saved key, use it. If saved key is empty but env exists, use env.
           return {
               ...saved,
-              apiKey: saved.apiKey || envKey
+              apiKey: saved.apiKey || envKey,
+              theme: saved.theme || 'auto' // Default to auto
           };
       }
       return { 
           model: DEFAULT_MODELS[0].id, 
           temperature: 0.7, 
-          apiKey: envKey 
+          apiKey: envKey,
+          theme: 'auto'
       };
   });
+
+  // Theme Effect
+  useEffect(() => {
+    const root = window.document.documentElement;
+    const applyTheme = (theme: 'auto' | 'light' | 'dark') => {
+        if (theme === 'dark') {
+            root.classList.add('dark');
+        } else if (theme === 'light') {
+            root.classList.remove('dark');
+        } else {
+            // Auto
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                root.classList.add('dark');
+            } else {
+                root.classList.remove('dark');
+            }
+        }
+    };
+
+    applyTheme(settings.theme);
+
+    // Listen for system changes if auto
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+        if (settings.theme === 'auto') applyTheme('auto');
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+
+  }, [settings.theme]);
+
 
   // Persistence Effects
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions)); }, [sessions]);
@@ -143,6 +176,7 @@ const App: React.FC = () => {
   // Modals & UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile sidebar state
   
   // Custom Confirmation/Input Modal State
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -188,6 +222,7 @@ const App: React.FC = () => {
 
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
+    setIsSidebarOpen(false); // Close mobile sidebar
   };
 
   const createEmptySession = () => {
@@ -202,13 +237,17 @@ const App: React.FC = () => {
     };
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
+    setIsSidebarOpen(false); // Close mobile sidebar
   }
 
   const updateActiveSession = (updated: Session) => {
     setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
   };
 
-  const goHome = () => setActiveSessionId(null);
+  const goHome = () => {
+      setActiveSessionId(null);
+      setIsSidebarOpen(false);
+  }
 
   const promptDeleteSession = (e: React.MouseEvent, id: string) => {
       e.preventDefault();
@@ -302,20 +341,38 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 text-slate-100 font-sans">
+    <div className="flex h-screen w-screen bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
       
+      {/* MOBILE HEADER - Only visible on small screens */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 z-40 justify-between">
+         <div className="flex items-center gap-3">
+             <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600 dark:text-gray-300">
+                 <Menu size={24} />
+             </button>
+             <span className="font-bold text-lg text-gray-900 dark:text-gray-100">SyncLingua</span>
+         </div>
+      </div>
+
+      {/* MOBILE OVERLAY */}
+      {isSidebarOpen && (
+          <div 
+             className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+             onClick={() => setIsSidebarOpen(false)}
+          ></div>
+      )}
+
       {/* SIDEBAR */}
-      <div className="w-64 flex flex-col border-r border-slate-800 bg-slate-925 flex-shrink-0">
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col border-r border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-925 transform transition-transform duration-300 md:translate-x-0 md:relative md:inset-auto md:z-auto md:flex-shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Header */}
         <div 
             onClick={goHome}
-            className="p-4 border-b border-slate-800 flex items-center gap-2 cursor-pointer hover:bg-slate-900 transition-colors"
+            className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-850 transition-colors h-14 md:h-auto"
             title="Go to Dashboard"
         >
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-900/20">
                 <MessageSquare size={18} className="text-white" />
             </div>
-            <h1 className="font-bold text-lg tracking-tight text-slate-100">SyncLingua</h1>
+            <h1 className="font-bold text-lg tracking-tight text-gray-900 dark:text-gray-100">SyncLingua</h1>
         </div>
 
         {/* Navigation */}
@@ -325,48 +382,48 @@ const App: React.FC = () => {
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${
                     !activeSessionId 
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' 
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-gray-200'
                 }`}
             >
                 <LayoutGrid size={18} /> Dashboard
             </button>
 
             <button 
-                onClick={() => setIsLibraryOpen(true)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                onClick={() => { setIsLibraryOpen(true); setIsSidebarOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-gray-200"
             >
                 <Book size={18} /> Library
             </button>
 
             <button
                 onClick={createEmptySession}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-gray-200"
             >
                 <Plus size={18} /> Quick Empty
             </button>
         </div>
 
         {/* Session List */}
-        <div className="flex-1 overflow-y-auto px-2 custom-scrollbar space-y-1 pt-2 border-t border-slate-800/50">
-            <div className="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Recent</div>
+        <div className="flex-1 overflow-y-auto px-2 custom-scrollbar space-y-1 pt-2 border-t border-gray-200 dark:border-neutral-800/50">
+            <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-500 uppercase tracking-wider">Recent</div>
             {sessions.map(s => (
                 <div 
                     key={s.id}
                     className={`group relative mx-2 rounded-lg transition-all border ${
                         activeSessionId === s.id 
-                        ? 'bg-slate-800 border-slate-700 shadow-sm' 
-                        : 'border-transparent hover:bg-slate-900 text-slate-400 hover:text-slate-200'
+                        ? 'bg-white dark:bg-neutral-800 border-gray-300 dark:border-neutral-700 shadow-sm' 
+                        : 'border-transparent hover:bg-gray-200 dark:hover:bg-neutral-900 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                     }`}
                 >
                     {/* Main Click Target for Selection */}
                     <div 
-                        onClick={() => setActiveSessionId(s.id)}
+                        onClick={() => { setActiveSessionId(s.id); setIsSidebarOpen(false); }}
                         className="p-3 pr-20 cursor-pointer select-none relative z-0" 
                     >
-                        <div className={`font-medium truncate text-sm ${activeSessionId === s.id ? 'text-white' : 'text-current'}`}>
+                        <div className={`font-medium truncate text-sm ${activeSessionId === s.id ? 'text-indigo-600 dark:text-white' : 'text-current'}`}>
                             {s.title}
                         </div>
-                        <div className="text-xs text-slate-600 mt-1 truncate">
+                        <div className="text-xs text-gray-500 dark:text-gray-600 mt-1 truncate">
                             {new Date(s.createdAt).toLocaleDateString()}
                         </div>
                     </div>
@@ -380,7 +437,7 @@ const App: React.FC = () => {
                         <button 
                             type="button"
                             onClick={(e) => promptRenameSession(e, s.id)} 
-                            className="flex items-center justify-center w-7 h-7 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-indigo-400 transition-colors shadow-sm border border-slate-700/50 cursor-pointer pointer-events-auto"
+                            className="flex items-center justify-center w-7 h-7 bg-gray-100 dark:bg-neutral-800 hover:bg-white dark:hover:bg-neutral-700 rounded text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shadow-sm border border-gray-200 dark:border-neutral-700 cursor-pointer pointer-events-auto"
                             title="Rename"
                         >
                             <Pencil size={14} />
@@ -388,7 +445,7 @@ const App: React.FC = () => {
                         <button 
                             type="button"
                             onClick={(e) => promptDeleteSession(e, s.id)} 
-                            className="flex items-center justify-center w-7 h-7 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400 transition-colors shadow-sm border border-slate-700/50 cursor-pointer pointer-events-auto"
+                            className="flex items-center justify-center w-7 h-7 bg-gray-100 dark:bg-neutral-800 hover:bg-white dark:hover:bg-neutral-700 rounded text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors shadow-sm border border-gray-200 dark:border-neutral-700 cursor-pointer pointer-events-auto"
                             title="Delete"
                         >
                             <Trash2 size={14} />
@@ -397,17 +454,17 @@ const App: React.FC = () => {
                 </div>
             ))}
             {sessions.length === 0 && (
-                <div className="p-4 text-center text-slate-600 text-xs italic">
+                <div className="p-4 text-center text-gray-500 dark:text-gray-600 text-xs italic">
                     No history. Start a new session from Dashboard.
                 </div>
             )}
         </div>
 
         {/* Footer Settings */}
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-gray-200 dark:border-neutral-800">
             <button 
-                onClick={() => setIsSettingsOpen(true)}
-                className="flex items-center gap-3 text-slate-400 hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-slate-800"
+                onClick={() => { setIsSettingsOpen(true); setIsSidebarOpen(false); }}
+                className="flex items-center gap-3 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-800"
             >
                 <Settings size={20} />
                 <span>Settings</span>
@@ -416,7 +473,7 @@ const App: React.FC = () => {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-950">
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-white dark:bg-neutral-950 pt-14 md:pt-0">
         {activeSession ? (
             <ChatInterface 
                 session={activeSession}
@@ -429,11 +486,11 @@ const App: React.FC = () => {
         ) : (
             // DASHBOARD VIEW
             <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
-                <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-indigo-900/10">
-                    <MessageSquare size={32} className="text-indigo-500" />
+                <div className="w-16 h-16 bg-white dark:bg-neutral-900 rounded-2xl flex items-center justify-center mb-6 shadow-xl dark:shadow-indigo-900/10 border border-gray-100 dark:border-neutral-800">
+                    <MessageSquare size={32} className="text-indigo-600 dark:text-indigo-500" />
                 </div>
-                <h2 className="text-3xl font-bold text-slate-200 mb-3 tracking-tight">SyncLingua Studio</h2>
-                <p className="max-w-md text-center mb-10 text-slate-500 text-lg">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-200 mb-3 tracking-tight">SyncLingua Studio</h2>
+                <p className="max-w-md text-center mb-10 text-gray-600 dark:text-gray-500 text-lg">
                     Choose a template to start a new synchronized multi-model session.
                 </p>
                 
@@ -441,13 +498,13 @@ const App: React.FC = () => {
                     {/* New Empty Card */}
                     <button 
                          onClick={createEmptySession}
-                         className="flex flex-col items-center justify-center p-6 bg-slate-900/50 border border-slate-800 border-dashed hover:border-indigo-500/50 hover:bg-slate-900 rounded-xl transition-all group h-48"
+                         className="flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-neutral-900/50 border border-gray-200 dark:border-neutral-800 border-dashed hover:border-indigo-500/50 hover:bg-white dark:hover:bg-neutral-900 rounded-xl transition-all group h-48"
                     >
-                        <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                            <Plus size={24} className="text-slate-400 group-hover:text-indigo-400" />
+                        <div className="w-12 h-12 rounded-full bg-white dark:bg-neutral-800 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
+                            <Plus size={24} className="text-gray-400 dark:text-gray-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400" />
                         </div>
-                        <h3 className="font-semibold text-slate-300">Empty Session</h3>
-                        <p className="text-sm text-slate-600 mt-1">Start from scratch</p>
+                        <h3 className="font-semibold text-gray-700 dark:text-gray-300">Empty Session</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-600 mt-1">Start from scratch</p>
                     </button>
 
                     {/* Presets */}
@@ -455,18 +512,18 @@ const App: React.FC = () => {
                         <button 
                             key={sp.id}
                             onClick={() => createSession(sp.id)}
-                            className="flex flex-col text-left p-6 bg-slate-900 border border-slate-800 hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-900/10 rounded-xl transition-all group h-48 relative overflow-hidden"
+                            className="flex flex-col text-left p-6 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 hover:border-indigo-500/50 hover:shadow-xl dark:hover:shadow-indigo-900/10 rounded-xl transition-all group h-48 relative overflow-hidden"
                         >
-                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <LayoutGrid size={64} />
+                            <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-opacity">
+                                <LayoutGrid size={64} className="text-indigo-900 dark:text-white" />
                             </div>
-                            <h3 className="font-semibold text-xl text-slate-200 group-hover:text-indigo-400 mb-2">{sp.title}</h3>
+                            <h3 className="font-semibold text-xl text-gray-900 dark:text-gray-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mb-2">{sp.title}</h3>
                             <div className="flex-1">
-                                <p className="text-sm text-slate-500 line-clamp-2">
-                                    Main: <span className="text-slate-400">{presets.find(p => p.id === sp.mainPresetId)?.title || 'Custom'}</span>
+                                <p className="text-sm text-gray-500 dark:text-gray-500 line-clamp-2">
+                                    Main: <span className="text-gray-400 dark:text-gray-400">{presets.find(p => p.id === sp.mainPresetId)?.title || 'Custom'}</span>
                                 </p>
                             </div>
-                            <div className="flex items-center gap-2 mt-4 text-xs font-medium text-slate-600 bg-slate-950/50 p-2 rounded-lg w-fit">
+                            <div className="flex items-center gap-2 mt-4 text-xs font-medium text-gray-600 dark:text-gray-600 bg-gray-100 dark:bg-neutral-950/50 p-2 rounded-lg w-fit">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                                 {sp.defaultAuxPresetIds.length} Active Helpers
                             </div>
@@ -500,14 +557,14 @@ const App: React.FC = () => {
 
       {/* DELETE CONFIRMATION MODAL */}
       {itemToDelete && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-              <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl scale-100">
-                  <h3 className="text-lg font-semibold text-white mb-2">Delete Conversation?</h3>
-                  <p className="text-slate-400 text-sm mb-6">This action cannot be undone.</p>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-6 max-w-sm w-full shadow-2xl scale-100">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Conversation?</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">This action cannot be undone.</p>
                   <div className="flex justify-end gap-3">
                       <button 
                           onClick={() => setItemToDelete(null)}
-                          className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg text-sm transition-colors"
+                          className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-sm transition-colors"
                       >
                           Cancel
                       </button>
@@ -524,9 +581,9 @@ const App: React.FC = () => {
 
       {/* RENAME MODAL */}
       {itemToRename && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-              <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full shadow-2xl scale-100">
-                  <h3 className="text-lg font-semibold text-white mb-4">Rename Session</h3>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-6 max-w-sm w-full shadow-2xl scale-100">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Rename Session</h3>
                   <input
                       ref={renameInputRef}
                       type="text"
@@ -536,13 +593,13 @@ const App: React.FC = () => {
                           if (e.key === 'Enter') performRename();
                           if (e.key === 'Escape') setItemToRename(null);
                       }}
-                      className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none mb-6"
+                      className="w-full bg-gray-50 dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg p-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none mb-6"
                       placeholder="Enter new name..."
                   />
                   <div className="flex justify-end gap-3">
                       <button 
                           onClick={() => setItemToRename(null)}
-                          className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg text-sm transition-colors"
+                          className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-sm transition-colors"
                       >
                           Cancel
                       </button>

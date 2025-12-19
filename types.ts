@@ -46,7 +46,7 @@ export interface AuxTab {
 export interface Session {
   id: string;
   title: string;
-  mainPresetId: string | null;
+  mainPresetId: string | null; // Can be null if user wants to set custom prompt later
   mainMessages: Message[];
   auxTabs: AuxTab[];
   activeAuxTabId: string | null;
@@ -57,6 +57,7 @@ export interface AppSettings {
   model: string;
   temperature: number;
   apiKey: string;
+  theme: 'auto' | 'light' | 'dark';
 }
 
 export const DEFAULT_MODELS = [
