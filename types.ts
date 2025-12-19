@@ -1,6 +1,4 @@
 
-export type ThemeMode = 'auto' | 'light' | 'dark';
-
 export interface Message {
   id: string;
   role: 'user' | 'model';
@@ -59,12 +57,12 @@ export interface AppSettings {
   model: string;
   temperature: number;
   apiKey: string;
-  theme: ThemeMode;
+  theme: 'auto' | 'light' | 'dark';
 }
 
 export const DEFAULT_MODELS = [
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast)' },
-  { id: 'gemini-3-pro-preview', name: 'Gemini 3.0 Pro (Reasoning)' },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash' },
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3.0 Pro' },
 ];
 
 export const GEMINI_TTS_VOICES = [

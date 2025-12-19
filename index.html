@@ -12,12 +12,9 @@
         theme: {
           extend: {
             colors: {
-              dark: {
-                950: '#191919',
-                925: '#202020',
-                900: '#262626',
-                850: '#2d2d2d',
-                800: '#333333',
+              slate: {
+                925: '#0f172a',
+                950: '#020617'
               }
             }
           }
@@ -25,22 +22,18 @@
       }
     </script>
     <style>
+      /* Base transitions for theme switching */
+      * {
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+      }
+
       /* Custom scrollbar for webkit */
       ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
       }
-      .dark ::-webkit-scrollbar-track {
-        background: #202020; 
-      }
-      .dark ::-webkit-scrollbar-thumb {
-        background: #444444; 
-        border-radius: 4px;
-      }
-      .dark ::-webkit-scrollbar-thumb:hover {
-        background: #555555; 
-      }
       
+      /* Light Mode Scrollbar */
       ::-webkit-scrollbar-track {
         background: #f1f5f9; 
       }
@@ -52,8 +45,27 @@
         background: #94a3b8; 
       }
 
+      /* Dark Mode Scrollbar Overrides */
+      .dark ::-webkit-scrollbar-track {
+        background: #141414; 
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #333333; 
+        border-radius: 4px;
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #444444; 
+      }
+
+      /* Dark mode forced background */
+      .dark body {
+        background-color: #191919;
+        color: #f1f5f9;
+      }
+
       body {
-        transition: background-color 0.2s, color 0.2s;
+        background-color: #f8fafc;
+        color: #0f172a;
       }
     </style>
   <script type="importmap">
@@ -68,7 +80,7 @@
 }
 </script>
 </head>
-  <body class="bg-white dark:bg-dark-950 text-slate-900 dark:text-slate-100 overflow-hidden">
+  <body class="overflow-hidden">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
