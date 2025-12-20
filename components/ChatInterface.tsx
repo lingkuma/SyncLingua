@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert } from 'lucide-react';
+import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info } from 'lucide-react';
 import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate } from '../types';
 import { streamChat, generateAuxiliaryResponse, generateSpeech } from '../services/geminiService';
 
@@ -546,13 +546,64 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white dark:bg-neutral-950">
-                    {session.mainMessages.length === 0 && (
+                    {/* Main Chat Context Preview Header */}
+                    {mainPreset && (
+                        <div className="mb-6 mx-2 border border-indigo-100 dark:border-indigo-900/30 rounded-xl overflow-hidden bg-indigo-50/30 dark:bg-indigo-900/10">
+                            {/* Private Config Header */}
+                            <div className="bg-indigo-50/80 dark:bg-indigo-900/30 px-3 py-2 border-b border-indigo-100 dark:border-indigo-900/30 flex items-center gap-2">
+                                <Lock size={12} className="text-indigo-500" />
+                                <span className="text-xs font-bold text-indigo-800 dark:text-indigo-200 uppercase tracking-wider">System Configuration</span>
+                            </div>
+                            
+                            <div className="p-3 space-y-3 text-sm">
+                                {/* Base Template Info */}
+                                {mainPreset.systemTemplateId && (
+                                    <div className="flex gap-2">
+                                        <div className="shrink-0 mt-0.5"><LayoutTemplate size={14} className="text-gray-400" /></div>
+                                        <div>
+                                            <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                                {systemTemplates.find(t => t.id === mainPreset.systemTemplateId)?.title || 'Template'}
+                                            </span>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+                                                 {systemTemplates.find(t => t.id === mainPreset.systemTemplateId)?.content}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {/* Persona Info */}
+                                <div className="flex gap-2">
+                                    <div className="shrink-0 mt-0.5"><User size={14} className="text-gray-400" /></div>
+                                    <div>
+                                        <span className="font-semibold text-gray-700 dark:text-gray-300">Persona</span>
+                                        <p className="text-gray-600 dark:text-gray-400 mt-0.5 whitespace-pre-wrap">{mainPreset.systemPrompt}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Shared Context Info */}
+                            {mainPreset.sharedPrompt && (
+                                <>
+                                    <div className="bg-emerald-50/80 dark:bg-emerald-900/30 px-3 py-2 border-t border-b border-emerald-100 dark:border-emerald-900/30 flex items-center gap-2">
+                                        <Globe size={12} className="text-emerald-500" />
+                                        <span className="text-xs font-bold text-emerald-800 dark:text-emerald-200 uppercase tracking-wider">Public Shared Context</span>
+                                    </div>
+                                    <div className="p-3 bg-emerald-50/20 dark:bg-emerald-900/5">
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{mainPreset.sharedPrompt}</p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Empty State (only if no messages AND no preset - basically never for valid sessions) */}
+                    {session.mainMessages.length === 0 && !mainPreset && (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-600 space-y-2">
                             <Layers size={48} className="opacity-20" />
                             <p className="text-sm">Start the conversation...</p>
-                            {!settings.apiKey && <p className="text-xs text-amber-500">Please set API Key in settings.</p>}
                         </div>
                     )}
+
                     {session.mainMessages.map(m => (
                         <MessageBubble 
                             key={m.id} 
@@ -692,21 +743,40 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
                             {/* MESSAGES */}
                             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                                {activeAuxTab.messages.length === 0 && (
-                                    <div className="mt-10 text-center text-gray-500 dark:text-gray-600 text-sm px-8">
-                                        <p className="mb-2 font-medium text-gray-400 dark:text-gray-500">{activeAuxPreset?.title}</p>
-                                        <p>{activeAuxPreset?.autoTrigger 
-                                            ? "I will automatically analyze every new AI response." 
-                                            : "Ask me anything about the conversation on the left."}
-                                        </p>
-                                        {mainPreset?.sharedPrompt && (
-                                            <div className="mt-4 p-3 bg-gray-100 dark:bg-neutral-800/50 rounded-lg text-xs border border-gray-200 dark:border-neutral-700/50 text-gray-500 dark:text-gray-400">
-                                                <div className="font-bold text-emerald-600 dark:text-emerald-500 mb-1 uppercase tracking-wider">Context Aware</div>
-                                                I know that: {mainPreset.sharedPrompt}
+                                {/* Persistent Aux Info Header */}
+                                <div className="mb-8 px-4 text-gray-500 dark:text-gray-600 text-sm">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-indigo-100 dark:bg-neutral-800 rounded-lg shrink-0">
+                                            <Bot size={20} className="text-indigo-600 dark:text-indigo-400" />
+                                        </div>
+                                        <div className="space-y-2 flex-1">
+                                            <div>
+                                                <p className="font-bold text-gray-700 dark:text-gray-300">{activeAuxPreset?.title}</p>
+                                                <p className="text-xs mt-1 text-gray-500 dark:text-gray-500">{activeAuxPreset?.autoTrigger 
+                                                    ? "I will automatically analyze every new AI response." 
+                                                    : "Ask me anything about the conversation on the left."}
+                                                </p>
                                             </div>
-                                        )}
+                                            {/* Aux System Prompt Preview */}
+                                            <div className="p-2 bg-gray-100 dark:bg-neutral-800/50 rounded border border-gray-200 dark:border-neutral-700/50 text-xs italic">
+                                                "{activeAuxPreset?.systemPrompt}"
+                                            </div>
+
+                                            {/* Shared Context Preview */}
+                                            {mainPreset?.sharedPrompt && (
+                                                <div className="mt-2 p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-lg text-xs border border-emerald-100 dark:border-emerald-900/20 text-emerald-800 dark:text-emerald-200">
+                                                    <div className="font-bold text-emerald-600 dark:text-emerald-500 mb-1 uppercase tracking-wider flex items-center gap-1">
+                                                        <Globe size={10} /> Context Aware
+                                                    </div>
+                                                    <div className="whitespace-pre-wrap">
+                                                        I know that: {mainPreset.sharedPrompt}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
+                                </div>
+                                
                                 {activeAuxTab.messages.map((m, idx, arr) => (
                                     <MessageBubble 
                                         key={m.id} 
