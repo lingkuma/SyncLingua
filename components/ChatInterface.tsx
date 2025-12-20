@@ -92,6 +92,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   const mainEndRef = useRef<HTMLDivElement>(null);
   const auxEndRef = useRef<HTMLDivElement>(null);
 
+  // Textarea Refs for auto-resizing
+  const textareaMainRef = useRef<HTMLTextAreaElement>(null);
+  const textareaAuxRef = useRef<HTMLTextAreaElement>(null);
+
   // Audio System
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -111,6 +115,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
   useEffect(() => scrollToBottom(mainEndRef), [session.mainMessages, mobileView]);
   useEffect(() => scrollToBottom(auxEndRef), [session.auxTabs, session.activeAuxTabId, mobileView]);
+
+  // Auto-resize effects
+  useEffect(() => {
+    if (textareaMainRef.current) {
+        textareaMainRef.current.style.height = 'auto';
+        textareaMainRef.current.style.height = `${textareaMainRef.current.scrollHeight}px`;
+    }
+  }, [inputMain]);
+
+  useEffect(() => {
+    if (textareaAuxRef.current) {
+        textareaAuxRef.current.style.height = 'auto';
+        textareaAuxRef.current.style.height = `${textareaAuxRef.current.scrollHeight}px`;
+    }
+  }, [inputAux]);
 
   // Clean up audio on unmount
   useEffect(() => {
@@ -547,19 +566,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                 </div>
 
                 <div className="p-4 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800">
-                    <div className="flex gap-2 relative">
-                        <input
-                            className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors"
+                    <div className="flex gap-2 items-end relative">
+                        <textarea
+                            ref={textareaMainRef}
+                            rows={1}
+                            className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors resize-none custom-scrollbar min-h-[46px] max-h-40 overflow-y-auto"
                             placeholder={mainPreset ? `Speak in context of: ${mainPreset.title}...` : "Type a message..."}
                             value={inputMain}
                             onChange={e => setInputMain(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && sendMainMessage()}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    sendMainMessage();
+                                }
+                            }}
                             disabled={isGeneratingMain}
                         />
                         <button 
                             onClick={sendMainMessage}
                             disabled={isGeneratingMain || !inputMain.trim()}
-                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors"
+                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors shrink-0"
                         >
                             <Send size={20} />
                         </button>
@@ -696,19 +722,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
                             {/* INPUT */}
                             <div className="p-4 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800">
-                                <div className="flex gap-2">
-                                    <input
-                                        className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors"
+                                <div className="flex gap-2 items-end">
+                                    <textarea
+                                        ref={textareaAuxRef}
+                                        rows={1}
+                                        className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors resize-none custom-scrollbar min-h-[46px] max-h-40 overflow-y-auto"
                                         placeholder={activeAuxPreset?.autoTrigger ? "Manually ask specific question..." : `Ask ${activeAuxPreset?.title || 'helper'}...`}
                                         value={inputAux}
                                         onChange={e => setInputAux(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && sendAuxMessage()}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                sendAuxMessage();
+                                            }
+                                        }}
                                         disabled={isGeneratingAux}
                                     />
                                     <button 
                                         onClick={sendAuxMessage}
                                         disabled={isGeneratingAux || !inputAux.trim()}
-                                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors"
+                                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors shrink-0"
                                     >
                                         <Send size={20} />
                                     </button>
