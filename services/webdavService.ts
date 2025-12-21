@@ -1,25 +1,14 @@
 
 import { WebDavConfig } from "../types";
 
-const PROXY_ENDPOINT = '/api/proxy';
-
 const normalizeUrl = (url: string) => {
     let clean = url.trim();
     return clean.endsWith('/') ? clean : `${clean}/`;
 }
 
-// Helper: Route requests through the local Vercel proxy to avoid CORS
-const proxyFetch = async (targetUrl: string, init: RequestInit) => {
-    // Encode the target URL as a query parameter
-    const proxyUrl = `${PROXY_ENDPOINT}?url=${encodeURIComponent(targetUrl)}`;
-    
-    // We pass the configuration (Headers, Method, Body) to the proxy
-    return fetch(proxyUrl, init);
-}
-
 const ensureDirectory = async (url: string, auth: string) => {
-     // Check if it exists implicitly by trying MKCOL via Proxy
-     const response = await proxyFetch(url, {
+     // Check if it exists implicitly by trying MKCOL.
+     const response = await fetch(url, {
         method: 'MKCOL',
         headers: {
             'Authorization': auth
@@ -28,7 +17,10 @@ const ensureDirectory = async (url: string, auth: string) => {
     
     // 201 Created: Success
     // 405 Method Not Allowed: Often means resource already exists (Standard WebDAV)
+    // 301/302: Redirects might occur
     if (!response.ok && response.status !== 405) {
+        // We log warning but don't throw, as the PUT might still work if the server is weird
+        // or if it's a permission issue on an existing folder.
         console.warn(`WebDAV MKCOL ${url} status: ${response.status} ${response.statusText}`);
     }
 }
@@ -42,11 +34,13 @@ export const uploadToWebDav = async (config: WebDavConfig, jsonData: string) => 
     const baseUrl = normalizeUrl(config.url);
     
     // Target Structure: [Root]/SyncLingua/handbackup/synclingua_data.json
+    // Note: Some WebDAV servers are picky about trailing slashes for collections
     const folder1 = `${baseUrl}SyncLingua`;
     const folder2 = `${baseUrl}SyncLingua/handbackup`;
     const targetFile = `${baseUrl}SyncLingua/handbackup/synclingua_data.json`;
 
-    // 1. Attempt to create directory structure (Sequential)
+    // 1. Attempt to create directory structure
+    // We do this sequentially to ensure parents exist
     try {
         await ensureDirectory(folder1, auth);
         await ensureDirectory(folder2, auth);
@@ -54,8 +48,8 @@ export const uploadToWebDav = async (config: WebDavConfig, jsonData: string) => 
         console.warn("Folder creation error (ignoring to attempt PUT):", e);
     }
 
-    // 2. Upload File via Proxy
-    const response = await proxyFetch(targetFile, {
+    // 2. Upload File
+    const response = await fetch(targetFile, {
         method: 'PUT',
         headers: {
             'Authorization': auth,
@@ -78,7 +72,7 @@ export const downloadFromWebDav = async (config: WebDavConfig): Promise<string> 
     const baseUrl = normalizeUrl(config.url);
     const targetFile = `${baseUrl}SyncLingua/handbackup/synclingua_data.json`;
 
-    const response = await proxyFetch(targetFile, {
+    const response = await fetch(targetFile, {
         method: 'GET',
         headers: {
             'Authorization': auth,
