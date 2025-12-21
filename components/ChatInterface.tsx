@@ -25,6 +25,15 @@ const MessageBubble: React.FC<{
     const isAuto = msg.isAutoTrigger;
     const opacityClass = (isAuto && !isLastInGroup) ? 'opacity-50 hover:opacity-100 transition-opacity' : 'opacity-100';
 
+    // Helper to render text lines independently
+    const renderContent = (text: string) => {
+        return text.split('\n').map((line, index) => (
+            <div key={index} className="min-h-[1.2rem] whitespace-pre-wrap break-words">
+                {line || <br />}
+            </div>
+        ));
+    };
+
     return (
       <div className={`flex gap-3 mb-4 group ${msg.role === 'user' ? 'flex-row-reverse' : ''} ${opacityClass}`}>
         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
@@ -41,14 +50,14 @@ const MessageBubble: React.FC<{
             {msg.isAutoTrigger && msg.role === 'user' && (
                  <div className="text-[10px] text-amber-600 dark:text-amber-500/80 mb-1 uppercase tracking-wider font-bold">Auto Trigger</div>
             )}
-            <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+            <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === 'user' 
                 ? (msg.isAutoTrigger 
                     ? 'bg-amber-50 dark:bg-slate-800/50 border border-amber-900/10 dark:border-amber-900/30 text-amber-900 dark:text-slate-300 italic' 
                     : 'bg-indigo-600 dark:bg-slate-800 text-white dark:text-slate-100')
                 : 'bg-white dark:bg-neutral-900/80 border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-200 shadow-sm'
             } ${msg.role === 'user' ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
-                {msg.text}
+                {renderContent(msg.text)}
             </div>
             
             {/* Actions Line */}
