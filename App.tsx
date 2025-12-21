@@ -5,6 +5,7 @@ import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, DEFAULT_MO
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
 import { ChatInterface } from './components/ChatInterface';
+import { uploadToWebDav, downloadFromWebDav } from './services/webdavService';
 
 // --- INITIAL MOCK DATA ---
 
@@ -177,6 +178,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile sidebar state
+  const [isSyncing, setIsSyncing] = useState(false); // Cloud sync state
   
   // Custom Confirmation/Input Modal State
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -280,19 +282,22 @@ const App: React.FC = () => {
   }
 
   // Import / Export Handlers
+  const prepareBackupData = () => {
+      return {
+          version: 2,
+          timestamp: Date.now(),
+          data: {
+              sessions,
+              presets,
+              systemTemplates,
+              sessionPresets,
+              settings
+          }
+      };
+  }
+
   const handleExportData = () => {
-    const backupData = {
-        version: 2, // Bump version
-        timestamp: Date.now(),
-        data: {
-            sessions,
-            presets,
-            systemTemplates,
-            sessionPresets,
-            settings
-        }
-    };
-    
+    const backupData = prepareBackupData();
     const jsonString = JSON.stringify(backupData, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -306,38 +311,72 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const restoreFromData = (parsed: any) => {
+    if (!parsed.data) {
+        throw new Error("Invalid format: missing data field");
+    }
+
+    const { sessions: newSessions, presets: newPresets, sessionPresets: newSP, settings: newSettings, systemTemplates: newTemplates } = parsed.data;
+
+    // Update state with imported data
+    if (Array.isArray(newSessions)) setSessions(newSessions);
+    if (Array.isArray(newPresets)) setPresets(newPresets);
+    if (Array.isArray(newSP)) setSessionPresets(newSP);
+    if (Array.isArray(newTemplates)) setSystemTemplates(newTemplates);
+    if (newSettings) setSettings(newSettings);
+
+    // Reset active session to null to avoid ID mismatches
+    setActiveSessionId(null);
+  }
+
   const handleImportData = (file: File) => {
       const reader = new FileReader();
       reader.onload = (e) => {
           try {
               const content = e.target?.result as string;
               const parsed = JSON.parse(content);
-              
-              if (!parsed.data) {
-                  throw new Error("Invalid format: missing data field");
-              }
-
-              const { sessions: newSessions, presets: newPresets, sessionPresets: newSP, settings: newSettings, systemTemplates: newTemplates } = parsed.data;
-
-              // Update state with imported data
-              if (Array.isArray(newSessions)) setSessions(newSessions);
-              if (Array.isArray(newPresets)) setPresets(newPresets);
-              if (Array.isArray(newSP)) setSessionPresets(newSP);
-              if (Array.isArray(newTemplates)) setSystemTemplates(newTemplates);
-              if (newSettings) setSettings(newSettings);
-
-              // Reset active session to null to avoid ID mismatches
-              setActiveSessionId(null);
+              restoreFromData(parsed);
               setIsSettingsOpen(false);
-              
               alert("Import successful! All data has been restored.");
-
           } catch (err) {
               console.error("Import failed:", err);
               alert("Failed to import data. Please ensure the file is a valid SyncLingua JSON backup.");
           }
       };
       reader.readAsText(file);
+  };
+
+  // --- CLOUD SYNC HANDLERS ---
+  const handleCloudUpload = async () => {
+      if (!settings.webdav) return;
+      setIsSyncing(true);
+      try {
+          const data = prepareBackupData();
+          await uploadToWebDav(settings.webdav, JSON.stringify(data));
+          alert("Successfully uploaded backup to Cloud!");
+      } catch (e: any) {
+          console.error("Upload Error:", e);
+          alert(`Upload Failed: ${e.message}`);
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
+  const handleCloudDownload = async () => {
+      if (!settings.webdav) return;
+      setIsSyncing(true);
+      try {
+          const jsonString = await downloadFromWebDav(settings.webdav);
+          const parsed = JSON.parse(jsonString);
+          restoreFromData(parsed);
+          alert("Successfully restored data from Cloud!");
+          setIsSettingsOpen(false);
+      } catch (e: any) {
+          console.error("Download Error:", e);
+          alert(`Download Failed: ${e.message}`);
+      } finally {
+          setIsSyncing(false);
+      }
   };
 
   return (
@@ -542,6 +581,9 @@ const App: React.FC = () => {
         onSave={setSettings}
         onExportData={handleExportData}
         onImportData={handleImportData}
+        onCloudUpload={handleCloudUpload}
+        onCloudDownload={handleCloudDownload}
+        isSyncing={isSyncing}
       />
 
       <PresetManager

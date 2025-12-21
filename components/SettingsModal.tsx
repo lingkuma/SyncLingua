@@ -1,7 +1,7 @@
 
 import React, { useRef, useState } from 'react';
-import { X, Settings as SettingsIcon, Download, Upload, Key, Eye, EyeOff, Sun, Moon, Monitor } from 'lucide-react';
-import { AppSettings, DEFAULT_MODELS } from '../types';
+import { X, Settings as SettingsIcon, Download, Upload, Key, Eye, EyeOff, Sun, Moon, Monitor, Cloud, CloudUpload, CloudDownload, RefreshCw } from 'lucide-react';
+import { AppSettings, DEFAULT_MODELS, WebDavConfig } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -10,6 +10,9 @@ interface SettingsModalProps {
   onSave: (s: AppSettings) => void;
   onExportData: () => void;
   onImportData: (file: File) => void;
+  onCloudUpload: () => Promise<void>;
+  onCloudDownload: () => Promise<void>;
+  isSyncing: boolean;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
@@ -18,21 +21,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings, 
   onSave, 
   onExportData, 
-  onImportData 
+  onImportData,
+  onCloudUpload,
+  onCloudDownload,
+  isSyncing
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showKey, setShowKey] = useState(false);
+  const [showDavPass, setShowDavPass] = useState(false);
 
+  // Local state for WebDAV to allow typing without saving entire app state on every keystroke if desired,
+  // but here we sync directly with app settings for simplicity.
+  
   if (!isOpen) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       onImportData(e.target.files[0]);
     }
-    // Reset value so same file can be selected again if needed
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const updateWebDav = (update: Partial<WebDavConfig>) => {
+      const current = settings.webdav || { url: '', username: '', password: '' };
+      onSave({ ...settings, webdav: { ...current, ...update } });
   };
 
   return (
@@ -105,9 +119,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-                    Enter your Google Gemini API Key. It is stored locally in your browser.
-                </p>
                 {settings.apiKey && (
                     <div className="flex items-center gap-2 mt-3 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -119,15 +130,85 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <div className="border-t border-gray-200 dark:border-neutral-800"></div>
 
-          {/* Data Management Section */}
+          {/* Cloud Sync (WebDAV) */}
           <div>
             <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Download size={14} className="text-indigo-500" /> Data Backup
+              <Cloud size={14} className="text-sky-500" /> Cloud Sync (WebDAV)
+            </h3>
+            <div className="bg-gray-50 dark:bg-neutral-850 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                   Sync data to any WebDAV server (Nextcloud, Koofr, etc). 
+                   Files are saved to <code>/SyncLingua/handbackup/</code>.
+                </p>
+                <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Server URL</label>
+                    <input 
+                        type="text"
+                        value={settings.webdav?.url || ''}
+                        onChange={(e) => updateWebDav({ url: e.target.value })}
+                        placeholder="https://dav.example.com/remote.php/dav/files/user/"
+                        className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none text-sm"
+                    />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+                        <input 
+                            type="text"
+                            value={settings.webdav?.username || ''}
+                            onChange={(e) => updateWebDav({ username: e.target.value })}
+                            className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none text-sm"
+                        />
+                    </div>
+                    <div>
+                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                         <div className="relative">
+                            <input 
+                                type={showDavPass ? "text" : "password"}
+                                value={settings.webdav?.password || ''}
+                                onChange={(e) => updateWebDav({ password: e.target.value })}
+                                className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 pr-8 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none text-sm"
+                            />
+                            <button 
+                                type="button"
+                                onClick={() => setShowDavPass(!showDavPass)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                                {showDavPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                         </div>
+                    </div>
+                </div>
+                
+                <div className="flex gap-3 mt-4 pt-2 border-t border-gray-200 dark:border-neutral-700">
+                    <button
+                        onClick={onCloudUpload}
+                        disabled={isSyncing || !settings.webdav?.url}
+                        className="flex-1 bg-sky-600 hover:bg-sky-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-colors"
+                    >
+                        {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : <CloudUpload size={14} />}
+                        Push
+                    </button>
+                    <button
+                        onClick={onCloudDownload}
+                        disabled={isSyncing || !settings.webdav?.url}
+                        className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-neutral-700 dark:hover:bg-neutral-600 disabled:bg-gray-100 dark:disabled:bg-neutral-800 text-gray-700 dark:text-gray-200 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-colors"
+                    >
+                        {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : <CloudDownload size={14} />}
+                        Pull
+                    </button>
+                </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 dark:border-neutral-800"></div>
+
+          {/* Local Data Management Section */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Download size={14} className="text-indigo-500" /> Local Backup
             </h3>
             <div className="bg-gray-50 dark:bg-neutral-850 border border-gray-200 dark:border-neutral-800 border-dashed rounded-xl p-4">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                Save your sessions and presets to a local file to prevent data loss when clearing cache or updating the app.
-              </p>
               <div className="flex gap-3">
                 <button
                   onClick={onExportData}
@@ -183,9 +264,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) => onSave({ ...settings, temperature: parseFloat(e.target.value) })}
               className="w-full h-2 bg-gray-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
             />
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-                Lower values for factual/deterministic output, higher for creativity.
-            </p>
           </div>
         </div>
 

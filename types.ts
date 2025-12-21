@@ -53,11 +53,18 @@ export interface Session {
   createdAt: number;
 }
 
+export interface WebDavConfig {
+  url: string;
+  username: string;
+  password: string;
+}
+
 export interface AppSettings {
   model: string;
   temperature: number;
   apiKey: string;
   theme: 'auto' | 'light' | 'dark';
+  webdav?: WebDavConfig;
 }
 
 export const DEFAULT_MODELS = [
