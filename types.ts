@@ -1,4 +1,5 @@
 
+
 export interface Message {
   id: string;
   role: 'user' | 'model';
@@ -70,6 +71,11 @@ export interface AppSettings {
 export const DEFAULT_MODELS = [
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast)' },
   { id: 'gemini-3-pro-preview', name: 'Gemini 3.0 Pro (Reasoning)' },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3.0 Flash (Fast & Smart)' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+  { id: 'gemini-flash-latest', name: 'Gemini Flash (Latest)' },
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite (Latest)' },
+  { id: 'gemini-pro-latest', name: 'Gemini Pro (Latest)' },
 ];
 
 export const GEMINI_TTS_VOICES = [

@@ -1,4 +1,5 @@
 
+
 import React, { useRef, useState } from 'react';
 import { X, Settings as SettingsIcon, Download, Upload, Key, Eye, EyeOff, Sun, Moon, Monitor, Cloud, CloudUpload, CloudDownload, RefreshCw } from 'lucide-react';
 import { AppSettings, DEFAULT_MODELS, WebDavConfig } from '../types';
@@ -29,6 +30,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showKey, setShowKey] = useState(false);
   const [showDavPass, setShowDavPass] = useState(false);
+  
+  // Initialize custom model mode based on whether current model is in the default list
+  const [isCustomModel, setIsCustomModel] = useState(() => {
+    if (!settings.model) return false;
+    return !DEFAULT_MODELS.some(m => m.id === settings.model);
+  });
 
   // Local state for WebDAV to allow typing without saving entire app state on every keystroke if desired,
   // but here we sync directly with app settings for simplicity.
@@ -238,15 +245,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Model Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">AI Model</label>
-            <select
-              value={settings.model}
-              onChange={(e) => onSave({ ...settings, model: e.target.value })}
-              className="w-full bg-gray-50 dark:bg-neutral-850 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
-            >
-              {DEFAULT_MODELS.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+            <div className="space-y-3">
+              <select
+                value={isCustomModel ? 'custom' : settings.model}
+                onChange={(e) => {
+                  if (e.target.value === 'custom') {
+                    setIsCustomModel(true);
+                    // We don't change the underlying model string immediately when switching to custom mode
+                    // to allow the user to start typing from a blank slate or keep previous.
+                    // But for better UX, we might just keep current or clear it. 
+                    // Let's keep current in input, but the Select shows 'custom'.
+                  } else {
+                    setIsCustomModel(false);
+                    onSave({ ...settings, model: e.target.value });
+                  }
+                }}
+                className="w-full bg-gray-50 dark:bg-neutral-850 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
+              >
+                {DEFAULT_MODELS.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+                <option value="custom">Custom Model ID...</option>
+              </select>
+
+              {isCustomModel && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                  <input
+                    type="text"
+                    value={settings.model}
+                    onChange={(e) => onSave({ ...settings, model: e.target.value })}
+                    placeholder="e.g. gemini-1.5-pro-002"
+                    className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-indigo-300 dark:border-indigo-700 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Enter a specific model ID supported by the Google Gemini API.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Temperature */}
