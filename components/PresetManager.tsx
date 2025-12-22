@@ -32,7 +32,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
     // Ensure TTS Config object exists if we are in main mode
     const ttsConfig = editingPreset.ttsConfig || (activeTab === 'main' ? {
         enabled: true,
-        voiceName: 'Puck',
+        voiceName: 'Zephyr',
         autoPlay: false
     } : undefined);
 

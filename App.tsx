@@ -53,7 +53,7 @@ const INITIAL_MAIN_PRESETS: Preset[] = [
       systemTemplateId: 'st1', // Uses "Strict Roleplay"
       systemPrompt: 'You are a hiring manager at a tech company. Conduct a behavioral interview. Ask follow-up questions. Maintain a slightly intimidating tone.',
       sharedPrompt: 'The user is applying for a Senior Frontend Developer role. This is the second round of interviews.',
-      ttsConfig: { enabled: true, voiceName: 'Puck', autoPlay: false }
+      ttsConfig: { enabled: true, voiceName: 'Zephyr', autoPlay: false }
   },
 ];
 

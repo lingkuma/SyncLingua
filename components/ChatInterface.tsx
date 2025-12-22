@@ -180,7 +180,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
           let buffer = audioCache.current.get(msgId);
           if (!buffer) {
              // Default voice or configured voice
-             const voice = voiceName || mainPreset?.ttsConfig?.voiceName || 'Puck';
+             const voice = voiceName || mainPreset?.ttsConfig?.voiceName || 'Zephyr';
              buffer = await generateSpeech(settings.apiKey, text, voice, audioContextRef.current);
              audioCache.current.set(msgId, buffer);
           }
