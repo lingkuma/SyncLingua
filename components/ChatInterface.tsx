@@ -112,6 +112,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [loadingTTSId, setLoadingTTSId] = useState<string | null>(null);
 
+  // UI Selection State for Aux adder
+  const [showAuxAdder, setShowAuxAdder] = useState(false);
+
   // Maintain a ref to session for async callbacks
   const sessionRef = useRef(session);
   useEffect(() => {
@@ -229,8 +232,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       };
       
       // Update global session state 
-      // CRITICAL FIX: Explicitly include 'mainHistory' to ensure the Main AI message (generated just before this)
-      // is not lost if 'sessionRef.current' is slightly stale due to React batching/timing.
       const sessionWithTrigger = {
           ...sessionRef.current,
           mainMessages: mainHistory,
@@ -242,7 +243,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
       try {
         // 2. Call API
-        // CRITICAL: Pass empty array for auxHistory to make it stateless/independent
         await generateAuxiliaryResponse(
             settings.apiKey,
             settings.model,
@@ -498,9 +498,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       updateSession({ ...session, auxTabs: updatedTabs });
   }
 
-  // UI Selection State for Aux adder
-  const [showAuxAdder, setShowAuxAdder] = useState(false);
-
   return (
     <div className="flex flex-col h-full w-full bg-white dark:bg-neutral-950 overflow-hidden">
         {/* MOBILE TABS SWITCHER */}
@@ -694,32 +691,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                     
                     <div className="relative h-full flex items-center px-2">
                         <button 
-                            onClick={() => setShowAuxAdder(!showAuxAdder)}
+                            onClick={() => setShowAuxAdder(true)}
                             className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-neutral-800 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                            title="Add Helper Agent"
                         >
                             <Plus size={18} />
                         </button>
-                        
-                        {showAuxAdder && (
-                            <div className="absolute top-12 left-0 w-64 bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg shadow-xl z-20 overflow-hidden">
-                                <div className="p-2 text-xs font-semibold text-gray-500 dark:text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-neutral-900/50">Add Helper</div>
-                                <div className="max-h-64 overflow-y-auto">
-                                    {auxPresets.map(p => (
-                                        <button
-                                            key={p.id}
-                                            onClick={() => { handleAddAuxTab(p.id); setShowAuxAdder(false); }}
-                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-indigo-600 hover:text-white transition-colors border-b border-gray-100 dark:border-neutral-700/50 last:border-0 flex justify-between items-center"
-                                        >
-                                            {p.title}
-                                            {p.autoTrigger && <Zap size={12} className="text-amber-400 fill-amber-400" />}
-                                        </button>
-                                    ))}
-                                    {auxPresets.length === 0 && (
-                                        <div className="p-4 text-center text-xs text-gray-400">No aux presets found. Create one in Library.</div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -837,6 +814,63 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                 </div>
             </div>
         </div>
+
+        {/* ADD HELPER MODAL */}
+        {showAuxAdder && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowAuxAdder(false)}>
+                <div 
+                    className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center bg-gray-50 dark:bg-neutral-925">
+                        <div>
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Add Auxiliary Agent</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Select a specialized helper to join the conversation.</p>
+                        </div>
+                        <button onClick={() => setShowAuxAdder(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    
+                    <div className="overflow-y-auto p-2 custom-scrollbar">
+                        <div className="grid grid-cols-1 gap-1">
+                            {auxPresets.map(p => (
+                                <button
+                                    key={p.id}
+                                    onClick={() => { handleAddAuxTab(p.id); setShowAuxAdder(false); }}
+                                    className="group text-left p-3 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/10 border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900/30 transition-all flex items-start justify-between"
+                                >
+                                    <div className="flex-1 min-w-0 mr-3">
+                                        <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-0.5">
+                                            {p.title}
+                                            {p.autoTrigger && (
+                                                <div className="flex items-center gap-1 text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-500 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900/50 uppercase tracking-wide">
+                                                    <Zap size={10} className="fill-current" /> Auto
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                                            {p.systemPrompt}
+                                        </p>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-400 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition-colors shrink-0 mt-1">
+                                        <Plus size={16} />
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+
+                        {auxPresets.length === 0 && (
+                            <div className="p-8 text-center text-gray-400 dark:text-gray-500">
+                                <Bot size={32} className="mx-auto mb-2 opacity-50" />
+                                <p className="text-sm font-medium">No auxiliary tools found</p>
+                                <p className="text-xs mt-1">Go to Library to create new agents.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };
