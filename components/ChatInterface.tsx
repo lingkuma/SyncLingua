@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info } from 'lucide-react';
 import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate } from '../types';
@@ -627,6 +626,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                         <textarea
                             ref={textareaMainRef}
                             rows={1}
+                            name="main-chat-message"
+                            id="main-chat-message"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck="false"
                             className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors resize-none custom-scrollbar min-h-[46px] max-h-40 overflow-y-auto"
                             placeholder={mainPreset ? `Speak in context of: ${mainPreset.title}...` : "Type a message..."}
                             value={inputMain}
@@ -782,6 +786,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                     <textarea
                                         ref={textareaAuxRef}
                                         rows={1}
+                                        name="aux-chat-message"
+                                        id="aux-chat-message"
+                                        autoComplete="off"
+                                        autoCorrect="off"
+                                        spellCheck="false"
                                         className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors resize-none custom-scrollbar min-h-[46px] max-h-40 overflow-y-auto"
                                         placeholder={activeAuxPreset?.autoTrigger ? "Manually ask specific question..." : `Ask ${activeAuxPreset?.title || 'helper'}...`}
                                         value={inputAux}
