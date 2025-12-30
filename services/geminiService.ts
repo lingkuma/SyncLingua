@@ -234,14 +234,17 @@ export const generateSpeech = async (
   
   const ai = getClient(apiKey);
 
-  // Sanitize text: Remove common Markdown that might confuse the TTS model
-  // Also remove code blocks and other non-speakable structures
+  // Aggressive Sanitization to prevent "Prompt not supported" errors
   let cleanText = text
     .replace(/```[\s\S]*?```/g, '') // Remove code blocks
     .replace(/`[^`]*`/g, '')        // Remove inline code
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Extract link text
-    .replace(/[*#_]/g, '')          // Remove formatting chars
-    .replace(/^\s*>.*$/gm, '')      // Remove blockquotes
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Extract link text [text](url) -> text
+    .replace(/\[\d+\]/g, '')        // Remove citations like [1], [2]
+    .replace(/【.*?】/g, '')        // Remove source citations often used by Gemini 【1:0†source】
+    .replace(/(?:https?|ftp):\/\/[\n\S]+/g, '') // Remove raw URLs
+    .replace(/[*#_~>|]/g, '')       // Remove formatting characters
+    .replace(/^\s*[-•]\s+/gm, '')   // Remove list bullets
+    .replace(/\s+/g, ' ')           // Collapse multiple spaces
     .trim();
 
   // If text is extremely long, truncate to avoid errors (approx 4000 chars safety limit)
@@ -250,6 +253,7 @@ export const generateSpeech = async (
   }
 
   if (cleanText.length === 0) {
+      // If cleaning removed everything (e.g. only code blocks), throw friendly error
       throw new Error("Text contains only unspeakable characters or code");
   }
 
@@ -258,12 +262,12 @@ export const generateSpeech = async (
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: cleanText }] }],
         config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-            voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voiceName },
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+                voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: voiceName },
+                },
             },
-        },
         },
     });
 
@@ -274,7 +278,7 @@ export const generateSpeech = async (
         const textFallback = response.candidates?.[0]?.content?.parts?.[0]?.text;
         if (textFallback) {
             console.warn("TTS Model returned text instead of audio:", textFallback);
-            throw new Error(`TTS generation refused: ${textFallback}`);
+            throw new Error(`TTS generation refused by model (Safety/Policy).`);
         }
         throw new Error("No audio data returned from Gemini");
     }
@@ -291,6 +295,11 @@ export const generateSpeech = async (
         shouldCloseContext = true;
     }
     
+    // Ensure context is running (browser autoplay policy)
+    if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+    }
+    
     const audioBuffer = pcmToAudioBuffer(pcmData, audioContext, 24000);
     
     if (shouldCloseContext && audioContext.state !== 'closed') {
@@ -301,13 +310,21 @@ export const generateSpeech = async (
 
   } catch (error: any) {
     console.error("Gemini TTS API Error:", error);
-    // Handle the specific "model returned non-audio response" 400 error
-    if (error.message && (
-        error.message.includes("model returned non-audio response") || 
-        error.message.includes("prompt is not supported by the AudioOut model")
-    )) {
-        throw new Error("TTS Failed: The model refused to speak this text (Safety/Policy).");
+    
+    // Detailed error handling for the user
+    let userMessage = "TTS Failed";
+    
+    if (error.message) {
+        if (error.message.includes("model returned non-audio response") || 
+            error.message.includes("prompt is not supported by the AudioOut model")) {
+            userMessage = "TTS Skipped: Text content was rejected by the audio model.";
+        } else if (error.message.includes("400")) {
+             userMessage = "TTS Error: Invalid Request (400). Content might be too long or unsafe.";
+        } else {
+            userMessage = error.message;
+        }
     }
-    throw error;
+    
+    throw new Error(userMessage);
   }
 };
