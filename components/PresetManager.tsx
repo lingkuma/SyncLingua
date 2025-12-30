@@ -1,7 +1,8 @@
 
+
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Edit2, Check, Volume2, Zap, Globe, Lock, LayoutTemplate } from 'lucide-react';
-import { Preset, SessionPreset, SystemTemplate, GEMINI_TTS_VOICES } from '../types';
+import { X, Plus, Trash2, Edit2, Check, Volume2, Zap, Globe, Lock, LayoutTemplate, Image as ImageIcon } from 'lucide-react';
+import { Preset, SessionPreset, SystemTemplate, ImageTemplate, GEMINI_TTS_VOICES } from '../types';
 
 interface PresetManagerProps {
   isOpen: boolean;
@@ -9,20 +10,23 @@ interface PresetManagerProps {
   presets: Preset[];
   sessionPresets: SessionPreset[];
   systemTemplates: SystemTemplate[];
+  imageTemplates: ImageTemplate[];
   setPresets: (p: Preset[]) => void;
   setSessionPresets: (sp: SessionPreset[]) => void;
   setSystemTemplates: (st: SystemTemplate[]) => void;
+  setImageTemplates: (it: ImageTemplate[]) => void;
 }
 
 export const PresetManager: React.FC<PresetManagerProps> = ({ 
-  isOpen, onClose, presets, sessionPresets, systemTemplates, 
-  setPresets, setSessionPresets, setSystemTemplates 
+  isOpen, onClose, presets, sessionPresets, systemTemplates, imageTemplates,
+  setPresets, setSessionPresets, setSystemTemplates, setImageTemplates
 }) => {
-  const [activeTab, setActiveTab] = useState<'template' | 'main' | 'aux' | 'session'>('main');
+  const [activeTab, setActiveTab] = useState<'template' | 'image_template' | 'main' | 'aux' | 'session'>('main');
   
   const [editingPreset, setEditingPreset] = useState<Partial<Preset> | null>(null);
   const [editingSessionPreset, setEditingSessionPreset] = useState<Partial<SessionPreset> | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<Partial<SystemTemplate> | null>(null);
+  const [editingImageTemplate, setEditingImageTemplate] = useState<Partial<ImageTemplate> | null>(null);
 
   if (!isOpen) return null;
 
@@ -35,9 +39,16 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
         voiceName: 'Zephyr',
         autoPlay: false
     } : undefined);
+    
+    // Ensure Image Config exists if main mode
+    const backgroundImageConfig = editingPreset.backgroundImageConfig || (activeTab === 'main' ? {
+        enabled: false,
+        useSharedContext: true,
+        specificPrompt: ''
+    } : undefined);
 
     if (editingPreset.id) {
-        setPresets(presets.map(p => p.id === editingPreset.id ? { ...editingPreset, ttsConfig } as Preset : p));
+        setPresets(presets.map(p => p.id === editingPreset.id ? { ...editingPreset, ttsConfig, backgroundImageConfig } as Preset : p));
     } else {
         const newPreset: Preset = {
             id: Date.now().toString(),
@@ -47,6 +58,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
             sharedPrompt: editingPreset.sharedPrompt || '',
             type: activeTab as 'main' | 'aux',
             ttsConfig,
+            backgroundImageConfig,
             autoTrigger: editingPreset.autoTrigger
         };
         setPresets([...presets, newPreset]);
@@ -85,11 +97,28 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
       setEditingTemplate(null);
   };
 
+  const handleSaveImageTemplate = () => {
+      if(!editingImageTemplate?.title) return;
+      if (editingImageTemplate.id) {
+          setImageTemplates(imageTemplates.map(t => t.id === editingImageTemplate.id ? editingImageTemplate as ImageTemplate : t));
+      } else {
+          const newTemplate: ImageTemplate = {
+              id: Date.now().toString(),
+              title: editingImageTemplate.title || 'New Image Template',
+              prompt: editingImageTemplate.prompt || ''
+          };
+          setImageTemplates([...imageTemplates, newTemplate]);
+      }
+      setEditingImageTemplate(null);
+  };
+
   const handleDelete = (id: string) => {
     if (activeTab === 'session') {
         setSessionPresets(sessionPresets.filter(p => p.id !== id));
     } else if (activeTab === 'template') {
         setSystemTemplates(systemTemplates.filter(t => t.id !== id));
+    } else if (activeTab === 'image_template') {
+        setImageTemplates(imageTemplates.filter(t => t.id !== id));
     } else {
         setPresets(presets.filter(p => p.id !== id));
     }
@@ -99,9 +128,11 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
       setEditingPreset(null); 
       setEditingSessionPreset(null);
       setEditingTemplate(null);
+      setEditingImageTemplate(null);
 
       if (activeTab === 'session') setEditingSessionPreset({});
       else if (activeTab === 'template') setEditingTemplate({});
+      else if (activeTab === 'image_template') setEditingImageTemplate({});
       else setEditingPreset({ type: activeTab as 'main' | 'aux' });
   }
 
@@ -115,7 +146,8 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
 
         <div className="flex border-b border-gray-200 dark:border-neutral-800 overflow-x-auto bg-white dark:bg-neutral-900">
             {[
-                { id: 'template', label: 'Base Templates', icon: LayoutTemplate },
+                { id: 'template', label: 'Sys Templates', icon: LayoutTemplate },
+                { id: 'image_template', label: 'Img Templates', icon: ImageIcon },
                 { id: 'main', label: 'Main Scenarios', icon: Lock },
                 { id: 'aux', label: 'Auxiliary Tools', icon: Zap },
                 { id: 'session', label: 'Session Presets', icon: Globe }
@@ -124,8 +156,14 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                 return (
                     <button
                         key={tab.id}
-                        onClick={() => { setActiveTab(tab.id as any); setEditingPreset(null); setEditingSessionPreset(null); setEditingTemplate(null); }}
-                        className={`px-5 py-3 font-medium text-sm transition-colors uppercase tracking-wider flex items-center gap-2 whitespace-nowrap ${
+                        onClick={() => { 
+                            setActiveTab(tab.id as any); 
+                            setEditingPreset(null); 
+                            setEditingSessionPreset(null); 
+                            setEditingTemplate(null); 
+                            setEditingImageTemplate(null);
+                        }}
+                        className={`px-4 py-3 font-medium text-sm transition-colors uppercase tracking-wider flex items-center gap-2 whitespace-nowrap ${
                             activeTab === tab.id
                             ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10' 
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-neutral-800'
@@ -150,12 +188,14 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                 {(() => {
                     let items: any[] = [];
                     if (activeTab === 'template') items = systemTemplates;
+                    else if (activeTab === 'image_template') items = imageTemplates;
                     else if (activeTab === 'session') items = sessionPresets;
                     else items = presets.filter(p => p.type === activeTab);
 
                     return items.map(item => {
                         let isSelected = false;
                         if (activeTab === 'template') isSelected = editingTemplate?.id === item.id;
+                        else if (activeTab === 'image_template') isSelected = editingImageTemplate?.id === item.id;
                         else if (activeTab === 'session') isSelected = editingSessionPreset?.id === item.id;
                         else isSelected = editingPreset?.id === item.id;
 
@@ -164,6 +204,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                 key={item.id} 
                                 onClick={() => {
                                     if (activeTab === 'template') setEditingTemplate(item);
+                                    else if (activeTab === 'image_template') setEditingImageTemplate(item);
                                     else if (activeTab === 'session') setEditingSessionPreset(item);
                                     else setEditingPreset(item);
                                 }}
@@ -178,6 +219,9 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                         {item.title}
                                         {activeTab === 'main' && (item as Preset).systemTemplateId && (
                                             <LayoutTemplate size={12} className="text-indigo-500" />
+                                        )}
+                                        {activeTab === 'main' && (item as Preset).backgroundImageConfig?.enabled && (
+                                            <ImageIcon size={12} className="text-pink-500" />
                                         )}
                                         {activeTab === 'aux' && (item as Preset).autoTrigger && (
                                             <Zap size={12} className="text-amber-500 fill-amber-500" />
@@ -198,7 +242,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
 
             {/* Editor Panel */}
             <div className="w-full md:w-2/3 p-6 overflow-y-auto bg-white dark:bg-neutral-900/50">
-                {(editingPreset || editingSessionPreset || editingTemplate) ? (
+                {(editingPreset || editingSessionPreset || editingTemplate || editingImageTemplate) ? (
                     <div className="space-y-6 max-w-2xl mx-auto">
                         
                         {/* 1. SYSTEM TEMPLATE EDITOR */}
@@ -233,7 +277,39 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                             </>
                         )}
 
-                        {/* 2. SESSION PRESET EDITOR */}
+                        {/* 2. IMAGE TEMPLATE EDITOR */}
+                        {activeTab === 'image_template' && (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Template Name</label>
+                                    <input 
+                                        type="text" 
+                                        value={editingImageTemplate?.title || ''}
+                                        onChange={e => setEditingImageTemplate(prev => ({ ...prev, title: e.target.value }))}
+                                        className="w-full bg-gray-50 dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg p-3 text-gray-900 dark:text-gray-100 focus:border-indigo-500 outline-none"
+                                        placeholder="e.g., Cyberpunk City"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Base Image Prompt</label>
+                                    <p className="text-xs text-gray-500 mb-2">Common visual style or setting description.</p>
+                                    <textarea 
+                                        value={editingImageTemplate?.prompt || ''}
+                                        onChange={e => setEditingImageTemplate(prev => ({ ...prev, prompt: e.target.value }))}
+                                        className="w-full h-80 bg-gray-50 dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg p-3 text-gray-900 dark:text-gray-100 focus:border-indigo-500 outline-none font-mono text-sm leading-relaxed"
+                                        placeholder="e.g. A futuristic neon city, heavy rain, cyberpunk style, cinematic lighting..."
+                                    />
+                                </div>
+                                <button 
+                                    onClick={handleSaveImageTemplate}
+                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg flex items-center justify-center gap-2 font-medium"
+                                >
+                                    <Check size={18} /> Save Image Template
+                                </button>
+                            </>
+                        )}
+
+                        {/* 3. SESSION PRESET EDITOR */}
                         {activeTab === 'session' && (
                              <>
                                 <div>
@@ -295,7 +371,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                              </>
                         )}
 
-                        {/* 3. MAIN/AUX PRESET EDITOR */}
+                        {/* 4. MAIN/AUX PRESET EDITOR */}
                         {(activeTab === 'main' || activeTab === 'aux') && (
                             <>
                                 <div>
@@ -369,6 +445,96 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                                         placeholder="Describe the situation..."
                                                     />
                                                 </div>
+                                            </div>
+
+                                            {/* Section 3: Dynamic Scene Image */}
+                                            <div className="border border-pink-200 dark:border-pink-500/30 rounded-xl p-4 bg-pink-50/50 dark:bg-pink-900/10">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <ImageIcon size={16} className="text-pink-500 dark:text-pink-400" />
+                                                        <h3 className="text-sm font-bold text-pink-800 dark:text-pink-200 uppercase tracking-wider">Dynamic Scene Image</h3>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <input 
+                                                            type="checkbox"
+                                                            id="imgEnabled"
+                                                            checked={editingPreset?.backgroundImageConfig?.enabled || false}
+                                                            onChange={e => setEditingPreset(prev => ({ 
+                                                                ...prev, 
+                                                                backgroundImageConfig: { 
+                                                                    enabled: e.target.checked,
+                                                                    imageTemplateId: prev?.backgroundImageConfig?.imageTemplateId,
+                                                                    useSharedContext: prev?.backgroundImageConfig?.useSharedContext ?? true,
+                                                                    specificPrompt: prev?.backgroundImageConfig?.specificPrompt || ''
+                                                                } 
+                                                            }))}
+                                                            className="w-4 h-4 rounded accent-pink-500"
+                                                        />
+                                                        <label htmlFor="imgEnabled" className="text-xs font-semibold text-pink-800 dark:text-pink-200">Enable Auto-Gen</label>
+                                                    </div>
+                                                </div>
+                                                
+                                                {editingPreset?.backgroundImageConfig?.enabled && (
+                                                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-pink-700 dark:text-pink-300 mb-1">
+                                                                Background Base Template (Optional)
+                                                            </label>
+                                                            <select
+                                                                value={editingPreset?.backgroundImageConfig?.imageTemplateId || ''}
+                                                                onChange={e => setEditingPreset(prev => ({ 
+                                                                    ...prev, 
+                                                                    backgroundImageConfig: { 
+                                                                        ...prev?.backgroundImageConfig!, 
+                                                                        imageTemplateId: e.target.value || undefined 
+                                                                    }
+                                                                }))}
+                                                                className="w-full bg-white dark:bg-neutral-900 border border-pink-200 dark:border-neutral-700 rounded-lg p-2.5 text-gray-900 dark:text-gray-200 text-sm focus:border-pink-500 outline-none"
+                                                            >
+                                                                <option value="">-- No Template (Custom Only) --</option>
+                                                                {imageTemplates.map(t => (
+                                                                    <option key={t.id} value={t.id}>{t.title}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-2">
+                                                             <input 
+                                                                type="checkbox"
+                                                                id="useShared"
+                                                                checked={editingPreset?.backgroundImageConfig?.useSharedContext ?? true}
+                                                                onChange={e => setEditingPreset(prev => ({ 
+                                                                    ...prev, 
+                                                                    backgroundImageConfig: { 
+                                                                        ...prev?.backgroundImageConfig!, 
+                                                                        useSharedContext: e.target.checked
+                                                                    } 
+                                                                }))}
+                                                                className="w-4 h-4 rounded accent-pink-500"
+                                                            />
+                                                            <label htmlFor="useShared" className="text-xs text-pink-800 dark:text-pink-200">Include "Public Shared Context" in prompt</label>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-xs font-semibold text-pink-700 dark:text-pink-300 mb-1">
+                                                                Specific Visual Prompt
+                                                            </label>
+                                                            <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2">Specific visual details for this scenario (e.g. "A busy german bakery counter, warm lighting").</p>
+                                                            <textarea 
+                                                                value={editingPreset?.backgroundImageConfig?.specificPrompt || ''}
+                                                                onChange={e => setEditingPreset(prev => ({ 
+                                                                    ...prev, 
+                                                                    backgroundImageConfig: { 
+                                                                        ...prev?.backgroundImageConfig!, 
+                                                                        specificPrompt: e.target.value
+                                                                    }
+                                                                }))}
+                                                                className="w-full h-20 bg-white dark:bg-neutral-900 border border-pink-200 dark:border-neutral-700 rounded-lg p-3 text-gray-900 dark:text-gray-200 focus:border-pink-500 outline-none font-mono text-sm leading-relaxed"
+                                                                placeholder="Visual description..."
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </>

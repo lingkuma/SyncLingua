@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
 import { Message } from "../types";
 
@@ -123,6 +124,65 @@ Your Goal: ${auxSystemPrompt}
 
     } catch (error) {
         console.error("Gemini Aux Error:", error);
+        throw error;
+    }
+}
+
+export const generateSceneImage = async (
+    apiKey: string,
+    model: string,
+    prompt: string
+): Promise<string> => {
+    if (!apiKey) throw new Error("API Key is missing.");
+    
+    const ai = getClient(apiKey);
+    
+    // For 'gemini-2.5-flash-image' (nano banana) or 'gemini-3-pro-image-preview', use generateContent
+    // aspectRatio is defaulted to 16:9 for background use
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: {
+                parts: [{ text: prompt }]
+            },
+            config: {
+                imageConfig: {
+                    aspectRatio: "16:9",
+                    // imageSize is only for 3.0 pro image, safe to omit for 2.5 flash image or if generic
+                }
+            }
+        });
+
+        // Iterate through parts to find the image
+        let base64String = null;
+        let textFallback = "";
+
+        if (response.candidates && response.candidates.length > 0 && response.candidates[0].content && response.candidates[0].content.parts) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    base64String = part.inlineData.data;
+                    break;
+                } else if (part.text) {
+                    textFallback += part.text;
+                }
+            }
+        } else {
+             console.warn("Response had no candidates", response);
+        }
+
+        if (!base64String) {
+            if (textFallback) {
+                console.warn("Image Generation Refusal/Text:", textFallback);
+                throw new Error(`Model returned text: ${textFallback}`);
+            }
+            throw new Error("No image data returned from model.");
+        }
+
+        return `data:image/png;base64,${base64String}`;
+
+    } catch (error: any) {
+        console.error("Gemini Image Gen Error:", error);
         throw error;
     }
 }

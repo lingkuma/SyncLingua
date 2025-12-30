@@ -1,13 +1,17 @@
+
+
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info } from 'lucide-react';
-import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate } from '../types';
-import { streamChat, generateAuxiliaryResponse, generateSpeech } from '../services/geminiService';
+import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon } from 'lucide-react';
+import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate } from '../types';
+import { streamChat, generateAuxiliaryResponse, generateSpeech, generateSceneImage } from '../services/geminiService';
+import { saveImageToCache } from '../services/imageDb';
 
 interface ChatInterfaceProps {
   session: Session;
   updateSession: (updated: Session) => void;
   auxPresets: Preset[];
   systemTemplates: SystemTemplate[];
+  imageTemplates: ImageTemplate[];
   settings: AppSettings;
   mainPreset?: Preset;
 }
@@ -52,9 +56,9 @@ const MessageBubble: React.FC<{
             <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === 'user' 
                 ? (msg.isAutoTrigger 
-                    ? 'bg-amber-50 dark:bg-slate-800/50 border border-amber-900/10 dark:border-amber-900/30 text-amber-900 dark:text-slate-300 italic' 
-                    : 'bg-indigo-600 dark:bg-slate-800 text-white dark:text-slate-100')
-                : 'bg-white dark:bg-neutral-900/80 border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-200 shadow-sm'
+                    ? 'bg-amber-50/90 dark:bg-slate-800/90 border border-amber-900/10 dark:border-amber-900/30 text-amber-900 dark:text-slate-300 italic' 
+                    : 'bg-indigo-600/90 dark:bg-slate-800/90 text-white dark:text-slate-100')
+                : 'bg-white/90 dark:bg-neutral-900/90 border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-200 shadow-sm'
             } ${msg.role === 'user' ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
                 {renderContent(msg.text)}
             </div>
@@ -66,8 +70,8 @@ const MessageBubble: React.FC<{
                 <button 
                     onClick={() => onPlayTTS(msg.text, msg.id)}
                     disabled={isLoadingTTS}
-                    className={`p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-slate-800 transition-colors ${
-                        isPlaying ? 'text-indigo-500 dark:text-indigo-400 bg-gray-200 dark:bg-slate-800' : 'text-gray-500 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300'
+                    className={`p-1.5 rounded-md hover:bg-gray-200/50 dark:hover:bg-slate-800/50 transition-colors ${
+                        isPlaying ? 'text-indigo-500 dark:text-indigo-400 bg-gray-200/50 dark:bg-slate-800/50' : 'text-gray-500 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300'
                     }`}
                     title="Read Aloud"
                 >
@@ -85,11 +89,12 @@ const MessageBubble: React.FC<{
     );
 };
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSession, auxPresets, systemTemplates, settings, mainPreset }) => {
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSession, auxPresets, systemTemplates, imageTemplates, settings, mainPreset }) => {
   const [inputMain, setInputMain] = useState('');
   const [inputAux, setInputAux] = useState('');
   const [isGeneratingMain, setIsGeneratingMain] = useState(false);
   const [isGeneratingAux, setIsGeneratingAux] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   
   // Mobile View Toggle
   const [mobileView, setMobileView] = useState<'main' | 'aux'>('main');
@@ -203,6 +208,63 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
           setLoadingTTSId(null);
       }
   };
+
+  const handleSceneImageGeneration = async (latestMessages: Message[]) => {
+      if (!mainPreset?.backgroundImageConfig?.enabled) return;
+      if (!settings.apiKey) return;
+
+      setIsGeneratingImage(true);
+
+      const config = mainPreset.backgroundImageConfig;
+      
+      // 1. Get Base Template
+      const template = config.imageTemplateId 
+         ? imageTemplates.find(t => t.id === config.imageTemplateId)?.prompt || '' 
+         : '';
+
+      // 2. Specific Prompt
+      const specific = config.specificPrompt || '';
+
+      // 3. Shared Context
+      const shared = (config.useSharedContext && mainPreset.sharedPrompt) ? mainPreset.sharedPrompt : '';
+
+      // 4. Conversation Context (Last 3 messages)
+      const recentHistory = latestMessages.slice(-3).map(m => `${m.role === 'user' ? 'User' : 'Character'}: ${m.text}`).join('\n');
+
+      // Construct Prompt
+      const fullPrompt = `
+      Create a cinematic, high-quality background image for a conversation scene.
+      
+      BASE STYLE:
+      ${template}
+      
+      SCENARIO DETAILS:
+      ${specific}
+      ${shared}
+      
+      CURRENT ACTION (Visualize this moment):
+      ${recentHistory}
+      
+      No text overlays. Focus on atmosphere and setting.
+      `;
+
+      try {
+          const imageUrl = await generateSceneImage(settings.apiKey, settings.imageModel || 'gemini-2.5-flash-image', fullPrompt);
+          
+          // Save to Local DB (IndexedDB)
+          await saveImageToCache(session.id, imageUrl);
+
+          // Update State for immediate view
+          updateSession({
+              ...sessionRef.current,
+              backgroundImageUrl: imageUrl
+          });
+      } catch (e) {
+          console.error("Image Gen Failed", e);
+      } finally {
+          setIsGeneratingImage(false);
+      }
+  }
 
   // --- Auto Trigger Logic ---
   const triggerAutoAuxResponse = async (tab: AuxTab, mainHistory: Message[]) => {
@@ -371,20 +433,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
     } finally {
         setIsGeneratingMain(false);
         
-        // --- CHECK AND TRIGGER AUTO-AUX ---
-        // We only trigger if we got a valid response
         if (finalFullText) {
             const finalMainHistory = [...updatedMessages, { id: botMsgId, role: 'model' as const, text: finalFullText, timestamp: Date.now() }];
             
-            // Find tabs with presets that have autoTrigger enabled
+            // --- CHECK AND TRIGGER AUTO-AUX ---
             const autoTabs = session.auxTabs.filter(t => {
                 const preset = auxPresets.find(p => p.id === t.presetId);
                 return preset?.autoTrigger === true;
             });
-
             if (autoTabs.length > 0) {
-                // Pass the updated history explicitly
                 autoTabs.forEach(tab => triggerAutoAuxResponse(tab, finalMainHistory));
+            }
+
+            // --- CHECK AND TRIGGER IMAGE GEN ---
+            if (mainPreset?.backgroundImageConfig?.enabled) {
+                handleSceneImageGeneration(finalMainHistory);
             }
         }
     }
@@ -498,9 +561,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-white dark:bg-neutral-950 overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-transparent overflow-hidden">
         {/* MOBILE TABS SWITCHER */}
-        <div className="md:hidden flex border-b border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shrink-0">
+        <div className="md:hidden flex border-b border-gray-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md shrink-0">
             <button 
                 onClick={() => setMobileView('main')}
                 className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -527,35 +590,41 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             
             {/* LEFT PANE: MAIN CHAT */}
             {/* Logic: Hidden on mobile if view is 'aux', Visible on Desktop always */}
-            <div className={`w-full md:w-1/2 flex flex-col border-r border-gray-200 dark:border-neutral-800 ${
+            <div className={`w-full md:w-1/2 flex flex-col border-r border-white/10 dark:border-white/5 transition-all duration-300 ${
                 mobileView === 'aux' ? 'hidden md:flex' : 'flex'
-            }`}>
-                <div className="h-14 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 bg-gray-50/80 dark:bg-neutral-900/50 justify-between shrink-0">
+            } ${session.backgroundImageUrl ? 'bg-transparent' : 'bg-white dark:bg-neutral-950'}`}>
+                <div className="h-14 border-b border-white/10 dark:border-white/5 flex items-center px-4 bg-transparent justify-between shrink-0">
                     <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                        <h3 className="font-semibold text-gray-800 dark:text-gray-200 truncate">
+                        <h3 className="font-semibold text-gray-800 dark:text-gray-200 truncate drop-shadow-sm">
                             {mainPreset ? mainPreset.title : 'Main Conversation'}
                         </h3>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
+                         {isGeneratingImage && (
+                            <div className="flex items-center gap-1 text-pink-500 text-xs font-bold animate-pulse" title="Generating Scene">
+                                <ImageIcon size={14} />
+                                <span className="hidden sm:inline">Updating Scene...</span>
+                            </div>
+                        )}
                         {!settings.apiKey && (
                             <div className="flex items-center gap-1 text-amber-500 text-xs font-bold animate-pulse" title="API Key missing in Settings">
                                 <TriangleAlert size={14} />
                                 <span className="hidden sm:inline">No API Key</span>
                             </div>
                         )}
-                        <div className="text-xs text-gray-500 dark:text-gray-500 px-2 py-1 bg-gray-200 dark:bg-neutral-800 rounded">
+                        <div className="text-xs text-gray-600 dark:text-gray-300 px-2 py-1 bg-white/20 dark:bg-black/20 rounded backdrop-blur-sm">
                             {session.mainMessages.length} msgs
                         </div>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white dark:bg-neutral-950">
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                     {/* Main Chat Context Preview Header */}
                     {mainPreset && (
-                        <div className="mb-6 mx-2 border border-indigo-100 dark:border-indigo-900/30 rounded-xl overflow-hidden bg-indigo-50/30 dark:bg-indigo-900/10">
+                        <div className="mb-6 mx-2 border border-white/20 dark:border-white/10 rounded-xl overflow-hidden bg-white/10 dark:bg-black/10 backdrop-blur-sm">
                             {/* Private Config Header */}
-                            <div className="bg-indigo-50/80 dark:bg-indigo-900/30 px-3 py-2 border-b border-indigo-100 dark:border-indigo-900/30 flex items-center gap-2">
+                            <div className="bg-indigo-50/10 dark:bg-indigo-900/10 px-3 py-2 border-b border-white/10 dark:border-white/5 flex items-center gap-2">
                                 <Lock size={12} className="text-indigo-500" />
                                 <span className="text-xs font-bold text-indigo-800 dark:text-indigo-200 uppercase tracking-wider">System Configuration</span>
                             </div>
@@ -581,7 +650,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                     <div className="shrink-0 mt-0.5"><User size={14} className="text-gray-400" /></div>
                                     <div>
                                         <span className="font-semibold text-gray-700 dark:text-gray-300">Persona</span>
-                                        <p className="text-gray-600 dark:text-gray-400 mt-0.5 whitespace-pre-wrap">{mainPreset.systemPrompt}</p>
+                                        <p className="text-gray-600 dark:text-gray-300 mt-0.5 whitespace-pre-wrap drop-shadow-sm">{mainPreset.systemPrompt}</p>
                                     </div>
                                 </div>
                             </div>
@@ -589,12 +658,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                             {/* Shared Context Info */}
                             {mainPreset.sharedPrompt && (
                                 <>
-                                    <div className="bg-emerald-50/80 dark:bg-emerald-900/30 px-3 py-2 border-t border-b border-emerald-100 dark:border-emerald-900/30 flex items-center gap-2">
+                                    <div className="bg-emerald-50/10 dark:bg-emerald-900/10 px-3 py-2 border-t border-b border-white/10 dark:border-white/5 flex items-center gap-2">
                                         <Globe size={12} className="text-emerald-500" />
                                         <span className="text-xs font-bold text-emerald-800 dark:text-emerald-200 uppercase tracking-wider">Public Shared Context</span>
                                     </div>
-                                    <div className="p-3 bg-emerald-50/20 dark:bg-emerald-900/5">
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{mainPreset.sharedPrompt}</p>
+                                    <div className="p-3 bg-emerald-50/5 dark:bg-emerald-900/5">
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap drop-shadow-sm">{mainPreset.sharedPrompt}</p>
                                     </div>
                                 </>
                             )}
@@ -621,7 +690,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                     <div ref={mainEndRef} />
                 </div>
 
-                <div className="p-4 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800">
+                <div className="p-4 bg-transparent border-t border-white/10 dark:border-white/5">
                     <div className="flex gap-2 items-end relative">
                         <textarea
                             ref={textareaMainRef}
@@ -631,7 +700,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                             autoComplete="off"
                             autoCorrect="off"
                             spellCheck="false"
-                            className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors resize-none custom-scrollbar min-h-[46px] max-h-40 overflow-y-auto"
+                            className="flex-1 bg-white/10 dark:bg-black/20 text-gray-900 dark:text-gray-100 placeholder-gray-600 dark:placeholder-gray-400 rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-600/50 outline-none border border-white/20 dark:border-white/10 transition-colors resize-none custom-scrollbar min-h-[46px] max-h-40 overflow-y-auto backdrop-blur-md shadow-inner"
                             placeholder={mainPreset ? `Speak in context of: ${mainPreset.title}...` : "Type a message..."}
                             value={inputMain}
                             onChange={e => setInputMain(e.target.value)}
@@ -646,7 +715,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                         <button 
                             onClick={sendMainMessage}
                             disabled={isGeneratingMain || !inputMain.trim()}
-                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors shrink-0"
+                            className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors shrink-0 backdrop-blur-sm"
                         >
                             <Send size={20} />
                         </button>
@@ -656,11 +725,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
             {/* RIGHT PANE: AUX CHAT */}
             {/* Logic: Hidden on mobile if view is 'main', Visible on Desktop always */}
-            <div className={`w-full md:w-1/2 flex flex-col bg-gray-50 dark:bg-neutral-950 ${
+            <div className={`w-full md:w-1/2 flex flex-col bg-transparent transition-all duration-300 ${
                 mobileView === 'main' ? 'hidden md:flex' : 'flex'
             }`}>
                 {/* AUX TABS HEADER */}
-                <div className="h-14 border-b border-gray-200 dark:border-neutral-800 flex items-center bg-gray-100 dark:bg-neutral-900/30 overflow-x-auto custom-scrollbar shrink-0">
+                <div className="h-14 border-b border-white/10 dark:border-white/5 flex items-center bg-transparent overflow-x-auto custom-scrollbar shrink-0">
                     {session.auxTabs.map(tab => {
                         const preset = auxPresets.find(p => p.id === tab.presetId);
                         const isGenerating = auxGeneratingIds.has(tab.id);
@@ -668,10 +737,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                             <div 
                                 key={tab.id}
                                 onClick={() => updateSession({ ...session, activeAuxTabId: tab.id })}
-                                className={`group flex items-center gap-2 px-4 h-full text-sm font-medium border-r border-gray-200 dark:border-neutral-800 cursor-pointer min-w-[140px] max-w-[200px] select-none relative ${
+                                className={`group flex items-center gap-2 px-4 h-full text-sm font-medium border-r border-white/10 dark:border-white/5 cursor-pointer min-w-[140px] max-w-[200px] select-none relative ${
                                     session.activeAuxTabId === tab.id 
-                                    ? 'bg-white dark:bg-neutral-900 text-indigo-600 dark:text-indigo-400 border-b-2 border-b-indigo-500' 
-                                    : 'text-gray-500 dark:text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-900/50'
+                                    ? 'bg-white/10 dark:bg-black/20 text-indigo-700 dark:text-indigo-400 border-b-2 border-b-indigo-500 backdrop-blur-sm' 
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-white/5 dark:hover:bg-white/5'
                                 }`}
                             >
                                 {/* Auto Trigger Indicator on Tab */}
@@ -696,7 +765,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                     <div className="relative h-full flex items-center px-2">
                         <button 
                             onClick={() => setShowAuxAdder(true)}
-                            className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-neutral-800 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                            className="p-1.5 rounded-md hover:bg-white/10 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                             title="Add Helper Agent"
                         >
                             <Plus size={18} />
@@ -705,12 +774,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                 </div>
 
                 {/* AUX CHAT AREA */}
-                <div className="flex-1 flex flex-col min-h-0 bg-gray-50 dark:bg-neutral-925/50">
+                <div className="flex-1 flex flex-col min-h-0 bg-transparent">
                     {activeAuxTab ? (
                         <>
                             {/* TOOLBAR */}
-                            <div className="h-10 border-b border-gray-200 dark:border-neutral-800/50 flex items-center justify-between px-4 bg-gray-100/50 dark:bg-neutral-900/30 shrink-0">
-                                <div className="text-xs text-gray-500 flex items-center gap-1">
+                            <div className="h-10 border-b border-white/10 dark:border-white/5 flex items-center justify-between px-4 bg-transparent shrink-0">
+                                <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                                     {activeAuxPreset?.autoTrigger ? (
                                         <>
                                             <Zap size={12} className="text-amber-500" />
@@ -725,7 +794,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                 <button 
                                     onClick={clearAuxContext}
                                     title="Clear history for this helper (keeps context)"
-                                    className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2 py-1 hover:bg-gray-200 dark:hover:bg-neutral-800 rounded transition-colors"
+                                    className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2 py-1 hover:bg-white/10 dark:hover:bg-white/5 rounded transition-colors"
                                 >
                                     <RefreshCw size={12} /> Clear Memory
                                 </button>
@@ -734,28 +803,28 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                             {/* MESSAGES */}
                             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                                 {/* Persistent Aux Info Header */}
-                                <div className="mb-8 px-4 text-gray-500 dark:text-gray-600 text-sm">
+                                <div className="mb-8 px-4 text-gray-500 dark:text-gray-400 text-sm">
                                     <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-indigo-100 dark:bg-neutral-800 rounded-lg shrink-0">
+                                        <div className="p-2 bg-indigo-100/40 dark:bg-neutral-800/40 rounded-lg shrink-0 backdrop-blur-sm">
                                             <Bot size={20} className="text-indigo-600 dark:text-indigo-400" />
                                         </div>
                                         <div className="space-y-2 flex-1">
                                             <div>
-                                                <p className="font-bold text-gray-700 dark:text-gray-300">{activeAuxPreset?.title}</p>
-                                                <p className="text-xs mt-1 text-gray-500 dark:text-gray-500">{activeAuxPreset?.autoTrigger 
+                                                <p className="font-bold text-gray-700 dark:text-gray-200 drop-shadow-sm">{activeAuxPreset?.title}</p>
+                                                <p className="text-xs mt-1 text-gray-500 dark:text-gray-300 drop-shadow-sm">{activeAuxPreset?.autoTrigger 
                                                     ? "I will automatically analyze every new AI response." 
                                                     : "Ask me anything about the conversation on the left."}
                                                 </p>
                                             </div>
                                             {/* Aux System Prompt Preview */}
-                                            <div className="p-2 bg-gray-100 dark:bg-neutral-800/50 rounded border border-gray-200 dark:border-neutral-700/50 text-xs italic">
+                                            <div className="p-2 bg-white/20 dark:bg-black/20 rounded border border-white/10 dark:border-white/5 text-xs italic backdrop-blur-sm">
                                                 "{activeAuxPreset?.systemPrompt}"
                                             </div>
 
                                             {/* Shared Context Preview */}
                                             {mainPreset?.sharedPrompt && (
-                                                <div className="mt-2 p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-lg text-xs border border-emerald-100 dark:border-emerald-900/20 text-emerald-800 dark:text-emerald-200">
-                                                    <div className="font-bold text-emerald-600 dark:text-emerald-500 mb-1 uppercase tracking-wider flex items-center gap-1">
+                                                <div className="mt-2 p-3 bg-emerald-50/20 dark:bg-emerald-900/10 rounded-lg text-xs border border-white/10 dark:border-white/5 text-emerald-800 dark:text-emerald-200 backdrop-blur-sm">
+                                                    <div className="font-bold text-emerald-600 dark:text-emerald-400 mb-1 uppercase tracking-wider flex items-center gap-1">
                                                         <Globe size={10} /> Context Aware
                                                     </div>
                                                     <div className="whitespace-pre-wrap">
@@ -781,7 +850,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                             </div>
 
                             {/* INPUT */}
-                            <div className="p-4 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800">
+                            <div className="p-4 bg-transparent border-t border-white/10 dark:border-white/5">
                                 <div className="flex gap-2 items-end">
                                     <textarea
                                         ref={textareaAuxRef}
@@ -791,7 +860,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                         autoComplete="off"
                                         autoCorrect="off"
                                         spellCheck="false"
-                                        className="flex-1 bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-500 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-600/50 outline-none border border-transparent dark:border-neutral-700 transition-colors resize-none custom-scrollbar min-h-[46px] max-h-40 overflow-y-auto"
+                                        className="flex-1 bg-white/10 dark:bg-black/20 text-gray-900 dark:text-gray-100 placeholder-gray-600 dark:placeholder-gray-400 rounded-lg px-4 py-3 focus:ring-2 focus:ring-emerald-600/50 outline-none border border-white/20 dark:border-white/10 transition-colors resize-none custom-scrollbar min-h-[46px] max-h-40 overflow-y-auto backdrop-blur-md shadow-inner"
                                         placeholder={activeAuxPreset?.autoTrigger ? "Manually ask specific question..." : `Ask ${activeAuxPreset?.title || 'helper'}...`}
                                         value={inputAux}
                                         onChange={e => setInputAux(e.target.value)}
@@ -806,7 +875,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                     <button 
                                         onClick={sendAuxMessage}
                                         disabled={isGeneratingAux || !inputAux.trim()}
-                                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors shrink-0"
+                                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-300 dark:disabled:bg-neutral-700 disabled:text-gray-500 dark:disabled:text-gray-500 text-white p-3 rounded-lg transition-colors shrink-0 backdrop-blur-sm"
                                     >
                                         <Send size={20} />
                                     </button>
@@ -815,9 +884,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                         </>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
-                            <Layers size={64} className="mb-4 text-gray-300 dark:text-gray-700" />
-                            <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400">No Helper Selected</h3>
-                            <p className="text-sm mt-2">Open a new tab (+) to add a language tool.</p>
+                            <Layers size={64} className="mb-4 text-gray-300 dark:text-gray-600 opacity-50" />
+                            <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 drop-shadow-sm">No Helper Selected</h3>
+                            <p className="text-sm mt-2 drop-shadow-sm">Open a new tab (+) to add a language tool.</p>
                         </div>
                     )}
                 </div>

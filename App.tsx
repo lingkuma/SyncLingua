@@ -1,11 +1,13 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu } from 'lucide-react';
-import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, DEFAULT_MODELS } from './types';
+import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, ImageTemplate, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
 import { ChatInterface } from './components/ChatInterface';
 import { uploadToWebDav, downloadFromWebDav } from './services/webdavService';
+import { getImageFromCache, deleteImageFromCache } from './services/imageDb';
 
 // --- INITIAL MOCK DATA ---
 
@@ -36,6 +38,24 @@ Focus on solving the user's problem immediately.`
     }
 ];
 
+const INITIAL_IMAGE_TEMPLATES: ImageTemplate[] = [
+    {
+        id: 'it1',
+        title: 'Cyberpunk City',
+        prompt: 'Futuristic city with neon lights, rain, wet streets, cyberpunk aesthetic, cinematic lighting, high contrast.'
+    },
+    {
+        id: 'it2',
+        title: 'Cozy Interior',
+        prompt: 'Warm, cozy interior, soft lighting, detailed textures, photorealistic, depth of field, wooden furniture.'
+    },
+    {
+        id: 'it3',
+        title: 'Anime Style',
+        prompt: 'Anime art style, vibrant colors, detailed background, studio ghibli inspired, 2D animation style.'
+    }
+];
+
 const INITIAL_MAIN_PRESETS: Preset[] = [
   { 
       id: 'mp1', 
@@ -44,7 +64,13 @@ const INITIAL_MAIN_PRESETS: Preset[] = [
       systemTemplateId: 'st3', // Uses "Professional Service" template
       systemPrompt: 'You are a cashier at a German supermarket (Edeka). Ask for a loyalty card (DeutschlandCard). Speak only German.',
       sharedPrompt: 'The user is a customer buying groceries at a checkout counter in Berlin. It is rush hour.',
-      ttsConfig: { enabled: true, voiceName: 'Fenrir', autoPlay: true }
+      ttsConfig: { enabled: true, voiceName: 'Fenrir', autoPlay: true },
+      backgroundImageConfig: {
+          enabled: true,
+          imageTemplateId: 'it2',
+          useSharedContext: true,
+          specificPrompt: 'A supermarket checkout counter, German products on belt, cashier view.'
+      }
   },
   { 
       id: 'mp2', 
@@ -71,6 +97,7 @@ const STORAGE_KEYS = {
     SESSIONS: 'synclingua_sessions',
     PRESETS: 'synclingua_presets',
     TEMPLATES: 'synclingua_templates',
+    IMAGE_TEMPLATES: 'synclingua_image_templates',
     SESSION_PRESETS: 'synclingua_session_presets',
     SETTINGS: 'synclingua_settings',
     ACTIVE_SESSION: 'synclingua_active_session_id'
@@ -100,14 +127,16 @@ const App: React.FC = () => {
     loadState(STORAGE_KEYS.TEMPLATES, INITIAL_TEMPLATES)
   );
 
+  const [imageTemplates, setImageTemplates] = useState<ImageTemplate[]>(() => 
+    loadState(STORAGE_KEYS.IMAGE_TEMPLATES, INITIAL_IMAGE_TEMPLATES)
+  );
+
   const [sessionPresets, setSessionPresets] = useState<SessionPreset[]>(() => 
       loadState(STORAGE_KEYS.SESSION_PRESETS, INITIAL_SESSION_PRESETS)
   );
   
   const [settings, setSettings] = useState<AppSettings>(() => {
       const saved = loadState<AppSettings | null>(STORAGE_KEYS.SETTINGS, null);
-      // Fallback to process.env.API_KEY if exists, but prioritize saved user key
-      // If process is undefined (browser), handle gracefully
       let envKey = '';
       try {
         if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
@@ -116,15 +145,16 @@ const App: React.FC = () => {
       } catch(e) {}
 
       if (saved) {
-          // If the user has a saved key, use it. If saved key is empty but env exists, use env.
           return {
               ...saved,
               apiKey: saved.apiKey || envKey,
-              theme: saved.theme || 'auto' // Default to auto
+              imageModel: saved.imageModel || DEFAULT_IMAGE_MODELS[0].id,
+              theme: saved.theme || 'auto' 
           };
       }
       return { 
           model: DEFAULT_MODELS[0].id, 
+          imageModel: DEFAULT_IMAGE_MODELS[0].id,
           temperature: 0.7, 
           apiKey: envKey,
           theme: 'auto'
@@ -163,22 +193,54 @@ const App: React.FC = () => {
 
 
   // Persistence Effects
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions)); }, [sessions]);
+  useEffect(() => { 
+      // Strip images before saving to localStorage to avoid quota limits
+      const lightSessions = sessions.map(s => ({ ...s, backgroundImageUrl: undefined }));
+      localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(lightSessions)); 
+  }, [sessions]);
+
   useEffect(() => { 
       if (activeSessionId) localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(activeSessionId));
       else localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION);
   }, [activeSessionId]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(presets)); }, [presets]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(systemTemplates)); }, [systemTemplates]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.IMAGE_TEMPLATES, JSON.stringify(imageTemplates)); }, [imageTemplates]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SESSION_PRESETS, JSON.stringify(sessionPresets)); }, [sessionPresets]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); }, [settings]);
 
+  // Load Background Image from IndexedDB when session changes
+  useEffect(() => {
+    const loadBackground = async () => {
+        if (!activeSessionId) return;
+        
+        // Don't reload if we already have it in state
+        const currentSession = sessions.find(s => s.id === activeSessionId);
+        if (currentSession?.backgroundImageUrl) return;
+
+        try {
+            const cachedImage = await getImageFromCache(activeSessionId);
+            if (cachedImage) {
+                setSessions(prev => prev.map(s => 
+                    s.id === activeSessionId 
+                    ? { ...s, backgroundImageUrl: cachedImage } 
+                    : s
+                ));
+            }
+        } catch (e) {
+            console.error("Failed to load background image from cache", e);
+        }
+    };
+    
+    loadBackground();
+  }, [activeSessionId]);
 
   // Modals & UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile sidebar state
-  const [isSyncing, setIsSyncing] = useState(false); // Cloud sync state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); 
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Custom Confirmation/Input Modal State
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -204,6 +266,7 @@ const App: React.FC = () => {
     const template = sessionPresets.find(sp => sp.id === sessionPresetId);
     if (!template) return;
 
+    // Check if main preset has a background config to preload (optional, logic currently relies on chat progression)
     const newSession: Session = {
         id: Date.now().toString(),
         title: template.title,
@@ -224,7 +287,7 @@ const App: React.FC = () => {
 
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
-    setIsSidebarOpen(false); // Close mobile sidebar
+    setIsSidebarOpen(false); 
   };
 
   const createEmptySession = () => {
@@ -239,7 +302,7 @@ const App: React.FC = () => {
     };
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
-    setIsSidebarOpen(false); // Close mobile sidebar
+    setIsSidebarOpen(false); 
   }
 
   const updateActiveSession = (updated: Session) => {
@@ -257,8 +320,13 @@ const App: React.FC = () => {
       setItemToDelete(id);
   }
 
-  const performDelete = () => {
+  const performDelete = async () => {
       if (itemToDelete) {
+          // Cleanup image cache
+          try {
+              await deleteImageFromCache(itemToDelete);
+          } catch(e) { console.warn("Failed to delete cached image", e); }
+
           setSessions(prev => prev.filter(s => s.id !== itemToDelete));
           if (activeSessionId === itemToDelete) setActiveSessionId(null);
           setItemToDelete(null);
@@ -283,13 +351,17 @@ const App: React.FC = () => {
 
   // Import / Export Handlers
   const prepareBackupData = () => {
+      // Strip images from backup
+      const lightSessions = sessions.map(s => ({ ...s, backgroundImageUrl: undefined }));
+      
       return {
-          version: 2,
+          version: 3,
           timestamp: Date.now(),
           data: {
-              sessions,
+              sessions: lightSessions,
               presets,
               systemTemplates,
+              imageTemplates,
               sessionPresets,
               settings
           }
@@ -316,13 +388,14 @@ const App: React.FC = () => {
         throw new Error("Invalid format: missing data field");
     }
 
-    const { sessions: newSessions, presets: newPresets, sessionPresets: newSP, settings: newSettings, systemTemplates: newTemplates } = parsed.data;
+    const { sessions: newSessions, presets: newPresets, sessionPresets: newSP, settings: newSettings, systemTemplates: newTemplates, imageTemplates: newImageTemplates } = parsed.data;
 
     // Update state with imported data
     if (Array.isArray(newSessions)) setSessions(newSessions);
     if (Array.isArray(newPresets)) setPresets(newPresets);
     if (Array.isArray(newSP)) setSessionPresets(newSP);
     if (Array.isArray(newTemplates)) setSystemTemplates(newTemplates);
+    if (Array.isArray(newImageTemplates)) setImageTemplates(newImageTemplates);
     if (newSettings) setSettings(newSettings);
 
     // Reset active session to null to avoid ID mismatches
@@ -380,10 +453,18 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
-      
+    // Global Background Container
+    <div 
+        className="flex h-screen w-screen bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100 font-sans overflow-hidden bg-cover bg-center transition-all duration-1000 ease-in-out"
+        style={{
+            backgroundImage: activeSession?.backgroundImageUrl ? `url(${activeSession.backgroundImageUrl})` : 'none'
+        }}
+    >
+      {/* Overlay to darken background slightly for text readability, NO BLUR as requested */}
+      <div className={`absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 ${activeSession?.backgroundImageUrl ? 'bg-black/30' : 'opacity-0'}`}></div>
+
       {/* MOBILE HEADER - Only visible on small screens */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 z-40 justify-between">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/90 dark:bg-neutral-900/90 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 z-40 justify-between">
          <div className="flex items-center gap-3">
              <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600 dark:text-gray-300">
                  <Menu size={24} />
@@ -395,141 +476,172 @@ const App: React.FC = () => {
       {/* MOBILE OVERLAY */}
       {isSidebarOpen && (
           <div 
-             className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+             className="md:hidden fixed inset-0 bg-black/50 z-40"
              onClick={() => setIsSidebarOpen(false)}
           ></div>
       )}
 
-      {/* SIDEBAR */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col border-r border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-925 transform transition-transform duration-300 md:translate-x-0 md:relative md:inset-auto md:z-auto md:flex-shrink-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        {/* Header */}
-        <div 
-            onClick={goHome}
-            className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center gap-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-850 transition-colors h-14 md:h-auto"
-            title="Go to Dashboard"
-        >
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-900/20">
-                <MessageSquare size={18} className="text-white" />
-            </div>
-            <h1 className="font-bold text-lg tracking-tight text-gray-900 dark:text-gray-100">SyncLingua</h1>
-        </div>
-
-        {/* Navigation */}
-        <div className="p-4 space-y-2">
-            <button 
-                onClick={goHome}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${
-                    !activeSessionId 
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' 
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-            >
-                <LayoutGrid size={18} /> Dashboard
-            </button>
-
-            <button 
-                onClick={() => { setIsLibraryOpen(true); setIsSidebarOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-gray-200"
-            >
-                <Book size={18} /> Library
-            </button>
-
-            <button
-                onClick={createEmptySession}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-neutral-800 hover:text-gray-900 dark:hover:text-gray-200"
-            >
-                <Plus size={18} /> Quick Empty
-            </button>
-        </div>
-
-        {/* Session List */}
-        <div className="flex-1 overflow-y-auto px-2 custom-scrollbar space-y-1 pt-2 border-t border-gray-200 dark:border-neutral-800/50">
-            <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-500 uppercase tracking-wider">Recent</div>
-            {sessions.map(s => (
+      {/* SIDEBAR - FULLY TRANSPARENT */}
+      <div className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/10 dark:border-white/5 bg-transparent transform transition-all duration-300 ease-in-out overflow-hidden ${
+            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${
+            isSidebarCollapsed ? 'md:w-0 md:border-none md:translate-x-0' : 'md:w-64 md:translate-x-0 md:relative'
+        } md:inset-auto md:z-10 md:flex-shrink-0`}>
+        
+        {/* Inner Container to prevent squashing content during collapse */}
+        <div className="w-64 flex flex-col h-full min-w-[16rem]">
+            {/* Header */}
+            <div className="p-4 border-b border-white/10 dark:border-white/5 flex items-center justify-between h-14 md:h-auto">
                 <div 
-                    key={s.id}
-                    className={`group relative mx-2 rounded-lg transition-all border ${
-                        activeSessionId === s.id 
-                        ? 'bg-white dark:bg-neutral-800 border-gray-300 dark:border-neutral-700 shadow-sm' 
-                        : 'border-transparent hover:bg-gray-200 dark:hover:bg-neutral-900 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    onClick={goHome}
+                    className="flex items-center gap-2 cursor-pointer hover:bg-white/10 dark:hover:bg-black/20 transition-colors p-1 rounded-lg -ml-1 pr-3"
+                    title="Go to Dashboard"
+                >
+                    <div className="w-8 h-8 bg-indigo-600/90 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-900/20 backdrop-blur-sm">
+                        <MessageSquare size={18} className="text-white" />
+                    </div>
+                    <h1 className="font-bold text-lg tracking-tight text-gray-900 dark:text-gray-100 drop-shadow-sm">SyncLingua</h1>
+                </div>
+                {/* Collapse Button (Desktop Only) */}
+                <button 
+                    onClick={() => setIsSidebarCollapsed(true)} 
+                    className="hidden md:flex text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
+                    title="Collapse Sidebar"
+                >
+                    <PanelLeftClose size={18} />
+                </button>
+            </div>
+
+            {/* Navigation */}
+            <div className="p-4 space-y-2">
+                <button 
+                    onClick={goHome}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${
+                        !activeSessionId 
+                        ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-900/20 backdrop-blur-sm' 
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
                     }`}
                 >
-                    {/* Main Click Target for Selection */}
-                    <div 
-                        onClick={() => { setActiveSessionId(s.id); setIsSidebarOpen(false); }}
-                        className="p-3 pr-20 cursor-pointer select-none relative z-0" 
-                    >
-                        <div className={`font-medium truncate text-sm ${activeSessionId === s.id ? 'text-indigo-600 dark:text-white' : 'text-current'}`}>
-                            {s.title}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-600 mt-1 truncate">
-                            {new Date(s.createdAt).toLocaleDateString()}
-                        </div>
-                    </div>
-                    
-                    {/* Action Buttons */}
-                    <div 
-                        className={`absolute right-2 top-2 flex gap-1 z-10 ${
-                            activeSessionId === s.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                        } transition-opacity duration-200`}
-                    >
-                        <button 
-                            type="button"
-                            onClick={(e) => promptRenameSession(e, s.id)} 
-                            className="flex items-center justify-center w-7 h-7 bg-gray-100 dark:bg-neutral-800 hover:bg-white dark:hover:bg-neutral-700 rounded text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shadow-sm border border-gray-200 dark:border-neutral-700 cursor-pointer pointer-events-auto"
-                            title="Rename"
-                        >
-                            <Pencil size={14} />
-                        </button>
-                        <button 
-                            type="button"
-                            onClick={(e) => promptDeleteSession(e, s.id)} 
-                            className="flex items-center justify-center w-7 h-7 bg-gray-100 dark:bg-neutral-800 hover:bg-white dark:hover:bg-neutral-700 rounded text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors shadow-sm border border-gray-200 dark:border-neutral-700 cursor-pointer pointer-events-auto"
-                            title="Delete"
-                        >
-                            <Trash2 size={14} />
-                        </button>
-                    </div>
-                </div>
-            ))}
-            {sessions.length === 0 && (
-                <div className="p-4 text-center text-gray-500 dark:text-gray-600 text-xs italic">
-                    No history. Start a new session from Dashboard.
-                </div>
-            )}
-        </div>
+                    <LayoutGrid size={18} /> Dashboard
+                </button>
 
-        {/* Footer Settings */}
-        <div className="p-4 border-t border-gray-200 dark:border-neutral-800">
-            <button 
-                onClick={() => { setIsSettingsOpen(true); setIsSidebarOpen(false); }}
-                className="flex items-center gap-3 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-neutral-800"
-            >
-                <Settings size={20} />
-                <span>Settings</span>
-            </button>
+                <button 
+                    onClick={() => { setIsLibraryOpen(true); setIsSidebarOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                >
+                    <Book size={18} /> Library
+                </button>
+
+                <button
+                    onClick={createEmptySession}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                >
+                    <Plus size={18} /> Quick Empty
+                </button>
+            </div>
+
+            {/* Session List */}
+            <div className="flex-1 overflow-y-auto px-2 custom-scrollbar space-y-1 pt-2 border-t border-white/10 dark:border-white/5">
+                <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recent</div>
+                {sessions.map(s => (
+                    <div 
+                        key={s.id}
+                        className={`group relative mx-2 rounded-lg transition-all border ${
+                            activeSessionId === s.id 
+                            ? 'bg-white/20 dark:bg-black/40 border-white/20 dark:border-white/10 shadow-sm backdrop-blur-sm' 
+                            : 'border-transparent hover:bg-white/10 dark:hover:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        {/* Main Click Target for Selection */}
+                        <div 
+                            onClick={() => { setActiveSessionId(s.id); setIsSidebarOpen(false); }}
+                            className="p-3 pr-20 cursor-pointer select-none relative z-0" 
+                        >
+                            <div className={`font-medium truncate text-sm ${activeSessionId === s.id ? 'text-indigo-700 dark:text-white' : 'text-current'}`}>
+                                {s.title}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                                {new Date(s.createdAt).toLocaleDateString()}
+                            </div>
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div 
+                            className={`absolute right-2 top-2 flex gap-1 z-10 ${
+                                activeSessionId === s.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            } transition-opacity duration-200`}
+                        >
+                            <button 
+                                type="button"
+                                onClick={(e) => promptRenameSession(e, s.id)} 
+                                className="flex items-center justify-center w-7 h-7 bg-white/40 dark:bg-black/40 hover:bg-white/80 dark:hover:bg-neutral-700/80 rounded text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shadow-sm border border-transparent hover:border-white/20 cursor-pointer pointer-events-auto"
+                                title="Rename"
+                            >
+                                <Pencil size={14} />
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={(e) => promptDeleteSession(e, s.id)} 
+                                className="flex items-center justify-center w-7 h-7 bg-white/40 dark:bg-black/40 hover:bg-white/80 dark:hover:bg-neutral-700/80 rounded text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors shadow-sm border border-transparent hover:border-white/20 cursor-pointer pointer-events-auto"
+                                title="Delete"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+                {sessions.length === 0 && (
+                    <div className="p-4 text-center text-gray-500 dark:text-gray-600 text-xs italic">
+                        No history. Start a new session from Dashboard.
+                    </div>
+                )}
+            </div>
+
+            {/* Footer Settings */}
+            <div className="p-4 border-t border-white/10 dark:border-white/5">
+                <button 
+                    onClick={() => { setIsSettingsOpen(true); setIsSidebarOpen(false); }}
+                    className="flex items-center gap-3 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-white/10 dark:hover:bg-white/5"
+                >
+                    <Settings size={20} />
+                    <span>Settings</span>
+                </button>
+            </div>
         </div>
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-white dark:bg-neutral-950 pt-14 md:pt-0">
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 pt-14 md:pt-0 transition-all duration-300">
+        
+        {/* Expand Sidebar Button (Desktop Only, Floating over content) */}
+        {isSidebarCollapsed && (
+             <button 
+                onClick={() => setIsSidebarCollapsed(false)} 
+                className="hidden md:flex absolute top-3 left-3 z-50 p-2 rounded-lg bg-white/20 dark:bg-black/40 hover:bg-white/40 dark:hover:bg-black/60 text-gray-500 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-300 backdrop-blur-md shadow-sm border border-white/10 transition-all"
+                title="Expand Sidebar"
+             >
+                <PanelLeftOpen size={20} />
+             </button>
+        )}
+
         {activeSession ? (
             <ChatInterface 
                 session={activeSession}
                 updateSession={updateActiveSession}
                 auxPresets={auxPresets}
                 systemTemplates={systemTemplates}
+                imageTemplates={imageTemplates}
                 settings={settings}
                 mainPreset={activeMainPreset}
             />
         ) : (
-            // DASHBOARD VIEW
-            <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
+            // DASHBOARD VIEW - TRANSPARENT
+            <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto bg-transparent">
                 <div className="w-16 h-16 bg-white dark:bg-neutral-900 rounded-2xl flex items-center justify-center mb-6 shadow-xl dark:shadow-indigo-900/10 border border-gray-100 dark:border-neutral-800">
                     <MessageSquare size={32} className="text-indigo-600 dark:text-indigo-500" />
                 </div>
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-200 mb-3 tracking-tight">SyncLingua Studio</h2>
-                <p className="max-w-md text-center mb-10 text-gray-600 dark:text-gray-500 text-lg">
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-200 mb-3 tracking-tight drop-shadow-md">SyncLingua Studio</h2>
+                <p className="max-w-md text-center mb-10 text-gray-600 dark:text-gray-300 text-lg drop-shadow-sm">
                     Choose a template to start a new synchronized multi-model session.
                 </p>
                 
@@ -537,13 +649,13 @@ const App: React.FC = () => {
                     {/* New Empty Card */}
                     <button 
                          onClick={createEmptySession}
-                         className="flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-neutral-900/50 border border-gray-200 dark:border-neutral-800 border-dashed hover:border-indigo-500/50 hover:bg-white dark:hover:bg-neutral-900 rounded-xl transition-all group h-48"
+                         className="flex flex-col items-center justify-center p-6 bg-white/10 dark:bg-black/30 backdrop-blur-sm border border-white/20 dark:border-white/10 border-dashed hover:border-indigo-500/50 hover:bg-white/20 dark:hover:bg-black/50 rounded-xl transition-all group h-48"
                     >
-                        <div className="w-12 h-12 rounded-full bg-white dark:bg-neutral-800 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
+                        <div className="w-12 h-12 rounded-full bg-white/80 dark:bg-neutral-800/80 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
                             <Plus size={24} className="text-gray-400 dark:text-gray-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400" />
                         </div>
-                        <h3 className="font-semibold text-gray-700 dark:text-gray-300">Empty Session</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-600 mt-1">Start from scratch</p>
+                        <h3 className="font-semibold text-gray-800 dark:text-gray-200">Empty Session</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Start from scratch</p>
                     </button>
 
                     {/* Presets */}
@@ -551,18 +663,18 @@ const App: React.FC = () => {
                         <button 
                             key={sp.id}
                             onClick={() => createSession(sp.id)}
-                            className="flex flex-col text-left p-6 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 hover:border-indigo-500/50 hover:shadow-xl dark:hover:shadow-indigo-900/10 rounded-xl transition-all group h-48 relative overflow-hidden"
+                            className="flex flex-col text-left p-6 bg-white/10 dark:bg-black/30 backdrop-blur-sm border border-white/20 dark:border-white/10 hover:border-indigo-500/50 hover:bg-white/20 dark:hover:bg-black/50 hover:shadow-xl dark:hover:shadow-indigo-900/10 rounded-xl transition-all group h-48 relative overflow-hidden"
                         >
                             <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-opacity">
                                 <LayoutGrid size={64} className="text-indigo-900 dark:text-white" />
                             </div>
-                            <h3 className="font-semibold text-xl text-gray-900 dark:text-gray-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mb-2">{sp.title}</h3>
+                            <h3 className="font-semibold text-xl text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mb-2 drop-shadow-sm">{sp.title}</h3>
                             <div className="flex-1">
-                                <p className="text-sm text-gray-500 dark:text-gray-500 line-clamp-2">
-                                    Main: <span className="text-gray-400 dark:text-gray-400">{presets.find(p => p.id === sp.mainPresetId)?.title || 'Custom'}</span>
+                                <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                                    Main: <span className="text-gray-500 dark:text-gray-400">{presets.find(p => p.id === sp.mainPresetId)?.title || 'Custom'}</span>
                                 </p>
                             </div>
-                            <div className="flex items-center gap-2 mt-4 text-xs font-medium text-gray-600 dark:text-gray-600 bg-gray-100 dark:bg-neutral-950/50 p-2 rounded-lg w-fit">
+                            <div className="flex items-center gap-2 mt-4 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white/20 dark:bg-black/20 p-2 rounded-lg w-fit">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                                 {sp.defaultAuxPresetIds.length} Active Helpers
                             </div>
@@ -592,9 +704,11 @@ const App: React.FC = () => {
         presets={presets}
         sessionPresets={sessionPresets}
         systemTemplates={systemTemplates}
+        imageTemplates={imageTemplates}
         setPresets={setPresets}
         setSessionPresets={setSessionPresets}
         setSystemTemplates={setSystemTemplates}
+        setImageTemplates={setImageTemplates}
       />
 
       {/* DELETE CONFIRMATION MODAL */}

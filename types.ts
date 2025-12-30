@@ -20,6 +20,19 @@ export interface SystemTemplate {
   content: string; // The reusable base instruction
 }
 
+export interface ImageTemplate {
+  id: string;
+  title: string;
+  prompt: string; // Base style/prompt for images
+}
+
+export interface BackgroundImageConfig {
+  enabled: boolean;
+  imageTemplateId?: string;
+  useSharedContext: boolean;
+  specificPrompt: string; // "Visual Persona"
+}
+
 export interface Preset {
   id: string;
   title: string;
@@ -28,6 +41,7 @@ export interface Preset {
   sharedPrompt?: string; // The "Public" instruction (Scenario, Context) shared with Aux agents
   type: 'main' | 'aux';
   ttsConfig?: TTSConfig;
+  backgroundImageConfig?: BackgroundImageConfig; // New: Image generation settings
   autoTrigger?: boolean; // If true, triggers automatically after Main AI response
 }
 
@@ -52,6 +66,7 @@ export interface Session {
   auxTabs: AuxTab[];
   activeAuxTabId: string | null;
   createdAt: number;
+  backgroundImageUrl?: string; // New: Persist current background
 }
 
 export interface WebDavConfig {
@@ -62,6 +77,7 @@ export interface WebDavConfig {
 
 export interface AppSettings {
   model: string;
+  imageModel: string; // New: Model for generating images
   temperature: number;
   apiKey: string;
   theme: 'auto' | 'light' | 'dark';
@@ -76,6 +92,11 @@ export const DEFAULT_MODELS = [
   { id: 'gemini-flash-latest', name: 'Gemini Flash (Latest)' },
   { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite (Latest)' },
   { id: 'gemini-pro-latest', name: 'Gemini Pro (Latest)' },
+];
+
+export const DEFAULT_IMAGE_MODELS = [
+  { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image' },
+  { id: 'gemini-3-pro-image-preview', name: 'Gemini 3.0 Pro Image (High Quality)' },
 ];
 
 export const GEMINI_TTS_VOICES = [
