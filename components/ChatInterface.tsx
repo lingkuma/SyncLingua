@@ -726,7 +726,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                     <div ref={mainEndRef} />
                 </div>
 
-                <div className="p-4 bg-transparent border-t border-white/10 dark:border-white/5">
+                <div className="p-4 bg-transparent">
                     <div className="flex gap-2 items-end relative">
                         <textarea
                             ref={textareaMainRef}
@@ -918,7 +918,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                             </div>
 
                             {/* INPUT */}
-                            <div className="p-4 bg-transparent border-t border-white/10 dark:border-white/5">
+                            <div className="p-4 bg-transparent">
                                 <div className="flex gap-2 items-end">
                                     <textarea
                                         ref={textareaAuxRef}
