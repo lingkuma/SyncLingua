@@ -30,7 +30,7 @@ export interface BackgroundImageConfig {
   enabled: boolean;
   imageTemplateId?: string;
   useSharedContext: boolean;
-  specificPrompt: string; // "Visual Persona"
+  specificPrompt: string;
 }
 
 export interface Preset {

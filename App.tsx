@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen, Maximize, Minimize, CloudUpload, CloudDownload } from 'lucide-react';
 import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, ImageTemplate, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
@@ -241,6 +241,31 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  const toggleFullscreen = () => {
+      if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(err => {
+              console.error(`Error attempting to enable fullscreen: ${err.message}`);
+          });
+          setIsFullscreen(true);
+      } else {
+          if (document.exitFullscreen) {
+              document.exitFullscreen();
+              setIsFullscreen(false);
+          }
+      }
+  };
+
+  useEffect(() => {
+      const handleFullscreenChange = () => {
+          setIsFullscreen(!!document.fullscreenElement);
+      };
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      return () => {
+          document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      };
+  }, []);
   
   // Custom Confirmation/Input Modal State
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -463,23 +488,15 @@ const App: React.FC = () => {
       {/* Overlay to darken background slightly for text readability, NO BLUR as requested */}
       <div className={`absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 ${activeSession?.backgroundImageUrl ? 'bg-black/30' : 'opacity-0'}`}></div>
 
-      {/* MOBILE HEADER - Only visible on small screens */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/90 dark:bg-neutral-900/90 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 z-40 justify-between">
-         <div className="flex items-center gap-3">
-             <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600 dark:text-gray-300">
-                 <Menu size={24} />
-             </button>
-             <span className="font-bold text-lg text-gray-900 dark:text-gray-100">SyncLingua</span>
-         </div>
-      </div>
+
 
       {/* MOBILE OVERLAY */}
-      {isSidebarOpen && (
-          <div 
-             className="md:hidden fixed inset-0 bg-black/50 z-40"
-             onClick={() => setIsSidebarOpen(false)}
-          ></div>
-      )}
+        {isSidebarOpen && (
+            <div 
+               className="md:hidden fixed inset-0 bg-black/50 z-40"
+               onClick={() => setIsSidebarOpen(false)}
+            ></div>
+        )}
 
       {/* SIDEBAR - FULLY TRANSPARENT */}
       <div className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/10 dark:border-white/5 bg-transparent transform transition-all duration-300 ease-in-out overflow-hidden ${
@@ -502,14 +519,23 @@ const App: React.FC = () => {
                     </div>
                     <h1 className="font-bold text-lg tracking-tight text-gray-900 dark:text-gray-100 drop-shadow-sm">SyncLingua</h1>
                 </div>
-                {/* Collapse Button (Desktop Only) */}
-                <button 
-                    onClick={() => setIsSidebarCollapsed(true)} 
-                    className="hidden md:flex text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
-                    title="Collapse Sidebar"
-                >
-                    <PanelLeftClose size={18} />
-                </button>
+                {/* Action Buttons */}
+                <div className="flex items-center gap-1">
+                    <button 
+                        onClick={toggleFullscreen}
+                        className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
+                        title={isFullscreen ? "退出全屏" : "全屏模式"}
+                    >
+                        {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                    </button>
+                    <button 
+                        onClick={() => setIsSidebarCollapsed(true)} 
+                        className="hidden md:flex text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
+                        title="Collapse Sidebar"
+                    >
+                        <PanelLeftClose size={18} />
+                    </button>
+                </div>
             </div>
 
             {/* Navigation */}
@@ -538,6 +564,23 @@ const App: React.FC = () => {
                 >
                     <Plus size={18} /> Quick Empty
                 </button>
+
+                <div className="flex gap-2 mt-1">
+                    <button
+                        onClick={handleCloudUpload}
+                        disabled={isSyncing || !settings.webdav}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-all font-medium text-sm text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <CloudUpload size={16} /> Push
+                    </button>
+                    <button
+                        onClick={handleCloudDownload}
+                        disabled={isSyncing || !settings.webdav}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-all font-medium text-sm text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <CloudDownload size={16} /> Pull
+                    </button>
+                </div>
             </div>
 
             {/* Session List */}
@@ -611,19 +654,7 @@ const App: React.FC = () => {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 pt-14 md:pt-0 transition-all duration-300">
-        
-        {/* Expand Sidebar Button (Desktop Only, Floating over content) */}
-        {isSidebarCollapsed && (
-             <button 
-                onClick={() => setIsSidebarCollapsed(false)} 
-                className="hidden md:flex absolute top-3 left-3 z-50 p-2 rounded-lg bg-white/20 dark:bg-black/40 hover:bg-white/40 dark:hover:bg-black/60 text-gray-500 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-300 backdrop-blur-md shadow-sm border border-white/10 transition-all"
-                title="Expand Sidebar"
-             >
-                <PanelLeftOpen size={20} />
-             </button>
-        )}
-
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 pt-0 md:pt-0 transition-all duration-300">
         {activeSession ? (
             <ChatInterface 
                 session={activeSession}
@@ -633,6 +664,10 @@ const App: React.FC = () => {
                 imageTemplates={imageTemplates}
                 settings={settings}
                 mainPreset={activeMainPreset}
+                isSidebarOpen={isSidebarOpen}
+                isSidebarCollapsed={isSidebarCollapsed}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                onExpandSidebar={() => setIsSidebarCollapsed(false)}
             />
         ) : (
             // DASHBOARD VIEW - TRANSPARENT
