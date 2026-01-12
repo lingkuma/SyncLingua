@@ -1,7 +1,7 @@
 
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon } from 'lucide-react';
+import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare } from 'lucide-react';
 import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate } from '../types';
 import { streamChat, generateAuxiliaryResponse, generateSpeech, generateSceneImage } from '../services/geminiService';
 import { saveImageToCache } from '../services/imageDb';
@@ -562,8 +562,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
   return (
     <div className="flex flex-col h-full w-full bg-transparent overflow-hidden">
-        {/* MOBILE TABS SWITCHER */}
-        <div className="md:hidden flex border-b border-gray-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md shrink-0">
+        {/* MOBILE TABS SWITCHER - Hidden, using toggle buttons in input area instead */}
+        <div className="hidden md:hidden flex border-b border-gray-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md shrink-0">
             <button 
                 onClick={() => setMobileView('main')}
                 className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -712,6 +712,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                             }}
                             disabled={isGeneratingMain}
                         />
+                        <button 
+                            onClick={() => setMobileView('aux')}
+                            className="md:hidden bg-emerald-600 hover:bg-emerald-500 text-white p-3 rounded-lg transition-colors shrink-0 backdrop-blur-sm"
+                            title="Switch to Aux Tools"
+                        >
+                            <Layers size={20} />
+                        </button>
                         <button 
                             onClick={sendMainMessage}
                             disabled={isGeneratingMain || !inputMain.trim()}
@@ -872,6 +879,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                         }}
                                         disabled={isGeneratingAux}
                                     />
+                                    <button 
+                                        onClick={() => setMobileView('main')}
+                                        className="md:hidden bg-indigo-600 hover:bg-indigo-500 text-white p-3 rounded-lg transition-colors shrink-0 backdrop-blur-sm"
+                                        title="Switch to Main Chat"
+                                    >
+                                        <MessageSquare size={20} />
+                                    </button>
                                     <button 
                                         onClick={sendAuxMessage}
                                         disabled={isGeneratingAux || !inputAux.trim()}
