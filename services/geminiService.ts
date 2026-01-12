@@ -131,14 +131,15 @@ Your Goal: ${auxSystemPrompt}
 export const generateSceneImage = async (
     apiKey: string,
     model: string,
-    prompt: string
+    prompt: string,
+    aspectRatio?: string
 ): Promise<string> => {
     if (!apiKey) throw new Error("API Key is missing.");
     
     const ai = getClient(apiKey);
     
     // For 'gemini-2.5-flash-image' (nano banana) or 'gemini-3-pro-image-preview', use generateContent
-    // aspectRatio is defaulted to 16:9 for background use
+    // aspectRatio defaults to 16:9 for desktop background use
     
     try {
         const response = await ai.models.generateContent({
@@ -148,7 +149,7 @@ export const generateSceneImage = async (
             },
             config: {
                 imageConfig: {
-                    aspectRatio: "16:9",
+                    aspectRatio: aspectRatio || "16:9",
                     // imageSize is only for 3.0 pro image, safe to omit for 2.5 flash image or if generic
                 }
             }

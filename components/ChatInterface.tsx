@@ -264,8 +264,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       No text overlays. Focus on atmosphere and setting.
       `;
 
+      // Detect device type and set appropriate aspect ratio
+      const isMobile = window.innerWidth < 768;
+      const aspectRatio = isMobile ? "9:16" : "16:9";
+
       try {
-          const imageUrl = await generateSceneImage(settings.apiKey, settings.imageModel || 'gemini-2.5-flash-image', fullPrompt);
+          const imageUrl = await generateSceneImage(settings.apiKey, settings.imageModel || 'gemini-2.5-flash-image', fullPrompt, aspectRatio);
           
           // Save to Local DB (IndexedDB)
           await saveImageToCache(session.id, imageUrl);
