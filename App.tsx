@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen, Maximize, Minimize } from 'lucide-react';
+import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen, Maximize, Minimize, CloudUpload, CloudDownload } from 'lucide-react';
 import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, ImageTemplate, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
@@ -564,6 +564,23 @@ const App: React.FC = () => {
                 >
                     <Plus size={18} /> Quick Empty
                 </button>
+
+                <div className="flex gap-2 mt-1">
+                    <button
+                        onClick={handleCloudUpload}
+                        disabled={isSyncing || !settings.webdav}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-all font-medium text-sm text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <CloudUpload size={16} /> Push
+                    </button>
+                    <button
+                        onClick={handleCloudDownload}
+                        disabled={isSyncing || !settings.webdav}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-all font-medium text-sm text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <CloudDownload size={16} /> Pull
+                    </button>
+                </div>
             </div>
 
             {/* Session List */}
