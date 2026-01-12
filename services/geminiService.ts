@@ -188,6 +188,43 @@ export const generateSceneImage = async (
     }
 }
 
+// --- AUDIO / STT FUNCTIONS ---
+
+export const transcribeUserAudio = async (
+    apiKey: string,
+    base64Audio: string,
+    mimeType: string
+): Promise<string> => {
+    if (!apiKey) throw new Error("API Key missing");
+
+    const ai = getClient(apiKey);
+    
+    // Use gemini-2.5-flash as it is fast and multimodal capable
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: {
+                parts: [
+                    {
+                        inlineData: {
+                            mimeType: mimeType,
+                            data: base64Audio
+                        }
+                    },
+                    {
+                        text: "Transcribe the audio exactly as spoken. Do not add any introductory text, commentary, or punctuation unless it is clearly part of the speech. If the audio is silent or unintelligible, return an empty string."
+                    }
+                ]
+            }
+        });
+
+        return response.text ? response.text.trim() : "";
+    } catch (error: any) {
+        console.error("Transcribe Error:", error);
+        throw new Error("Failed to transcribe audio.");
+    }
+};
+
 // --- TTS HELPER FUNCTIONS ---
 
 const decodeBase64 = (base64: string): Uint8Array => {

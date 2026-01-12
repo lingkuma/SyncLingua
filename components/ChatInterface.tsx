@@ -1,9 +1,9 @@
 
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare, Menu, PanelLeftOpen } from 'lucide-react';
+import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare, Menu, PanelLeftOpen, Mic } from 'lucide-react';
 import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate } from '../types';
-import { streamChat, generateAuxiliaryResponse, generateSpeech, generateSceneImage } from '../services/geminiService';
+import { streamChat, generateAuxiliaryResponse, generateSpeech, generateSceneImage, transcribeUserAudio } from '../services/geminiService';
 import { saveImageToCache } from '../services/imageDb';
 
 interface ChatInterfaceProps {
@@ -120,6 +120,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [loadingTTSId, setLoadingTTSId] = useState<string | null>(null);
 
+  // Recording State
+  const [recordingTarget, setRecordingTarget] = useState<'main' | 'aux' | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   // UI Selection State for Aux adder
   const [showAuxAdder, setShowAuxAdder] = useState(false);
 
@@ -172,8 +178,81 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
         if (audioContextRef.current) {
             audioContextRef.current.close();
         }
+        // Cleanup recording stream if active
+        if (mediaRecorderRef.current && mediaRecorderRef.current.stream) {
+            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        }
     };
   }, []);
+
+  // --- RECORDING FUNCTIONS ---
+  const startRecording = async (target: 'main' | 'aux') => {
+      try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorderRef.current = new MediaRecorder(stream);
+          audioChunksRef.current = [];
+
+          mediaRecorderRef.current.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                  audioChunksRef.current.push(event.data);
+              }
+          };
+
+          mediaRecorderRef.current.onstop = async () => {
+              const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' }); // Browsers usually record webm
+              await handleTranscription(audioBlob, target);
+              
+              // Stop tracks
+              stream.getTracks().forEach(track => track.stop());
+          };
+
+          mediaRecorderRef.current.start();
+          setRecordingTarget(target);
+
+      } catch (err) {
+          console.error("Error accessing microphone:", err);
+          alert("Could not access microphone. Please ensure permissions are granted.");
+      }
+  };
+
+  const stopRecording = () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+          setRecordingTarget(null);
+      }
+  };
+
+  const handleTranscription = async (audioBlob: Blob, target: 'main' | 'aux') => {
+      if (!settings.apiKey) {
+          alert("API Key missing. Cannot transcribe.");
+          return;
+      }
+
+      setIsTranscribing(true);
+      try {
+          // Convert Blob to Base64
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+              const base64String = reader.result as string;
+              // Remove data URL prefix (e.g., "data:audio/webm;base64,")
+              const base64Data = base64String.split(',')[1];
+              const mimeType = base64String.split(',')[0].split(':')[1].split(';')[0];
+
+              const text = await transcribeUserAudio(settings.apiKey, base64Data, mimeType);
+              
+              if (target === 'main') {
+                  setInputMain(prev => (prev + " " + text).trim());
+              } else {
+                  setInputAux(prev => (prev + " " + text).trim());
+              }
+              setIsTranscribing(false);
+          };
+      } catch (e) {
+          console.error("Transcription failed", e);
+          setIsTranscribing(false);
+      }
+  };
 
   const handleTTS = async (text: string, msgId: string, voiceName?: string) => {
       // Stop current
@@ -732,6 +811,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
                 <div className="p-4 bg-transparent">
                     <div className="flex gap-2 items-end relative">
+                        {/* Audio Recorder Button for Main */}
+                        <button 
+                            onClick={recordingTarget === 'main' ? stopRecording : () => startRecording('main')}
+                            className={`p-3 rounded-lg transition-all shrink-0 backdrop-blur-sm relative ${
+                                recordingTarget === 'main'
+                                ? 'bg-red-500 text-white animate-pulse'
+                                : 'bg-white/20 dark:bg-black/30 text-gray-600 dark:text-gray-300 hover:bg-white/30 dark:hover:bg-black/50'
+                            }`}
+                            disabled={isTranscribing || (recordingTarget !== null && recordingTarget !== 'main')}
+                            title={recordingTarget === 'main' ? "Stop Recording" : "Speak (STT)"}
+                        >
+                             {recordingTarget === 'main' ? <StopCircle size={20} /> : <Mic size={20} />}
+                             {/* Loading indicator overlay */}
+                             {isTranscribing && recordingTarget === 'main' && (
+                                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
+                                     <Loader2 size={16} className="animate-spin text-white" />
+                                 </div>
+                             )}
+                        </button>
+
                         <textarea
                             ref={textareaMainRef}
                             rows={1}
@@ -750,7 +849,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                     sendMainMessage();
                                 }
                             }}
-                            disabled={isGeneratingMain}
+                            disabled={isGeneratingMain || recordingTarget !== null}
                         />
                         <button 
                             onClick={() => setMobileView('aux')}
@@ -924,6 +1023,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                             {/* INPUT */}
                             <div className="p-4 bg-transparent">
                                 <div className="flex gap-2 items-end">
+                                    {/* Audio Recorder Button for Aux */}
+                                    <button 
+                                        onClick={recordingTarget === 'aux' ? stopRecording : () => startRecording('aux')}
+                                        className={`p-3 rounded-lg transition-all shrink-0 backdrop-blur-sm relative ${
+                                            recordingTarget === 'aux'
+                                            ? 'bg-red-500 text-white animate-pulse'
+                                            : 'bg-white/20 dark:bg-black/30 text-gray-600 dark:text-gray-300 hover:bg-white/30 dark:hover:bg-black/50'
+                                        }`}
+                                        disabled={isTranscribing || (recordingTarget !== null && recordingTarget !== 'aux')}
+                                        title={recordingTarget === 'aux' ? "Stop Recording" : "Speak (STT)"}
+                                    >
+                                        {recordingTarget === 'aux' ? <StopCircle size={20} /> : <Mic size={20} />}
+                                        {/* Loading indicator overlay */}
+                                        {isTranscribing && recordingTarget === 'aux' && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
+                                                <Loader2 size={16} className="animate-spin text-white" />
+                                            </div>
+                                        )}
+                                    </button>
+
                                     <textarea
                                         ref={textareaAuxRef}
                                         rows={1}
@@ -942,7 +1061,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                                 sendAuxMessage();
                                             }
                                         }}
-                                        disabled={isGeneratingAux}
+                                        disabled={isGeneratingAux || recordingTarget !== null}
                                     />
                                     <button 
                                         onClick={() => setMobileView('main')}
