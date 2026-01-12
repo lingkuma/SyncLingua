@@ -480,7 +480,7 @@ const App: React.FC = () => {
   return (
     // Global Background Container
     <div 
-        className="flex h-[calc(100vh+1px)] w-screen bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100 font-sans bg-cover bg-center transition-all duration-1000 ease-in-out"
+        className="flex h-[calc(100vh+1px)] md:h-screen w-screen bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100 font-sans bg-cover bg-center transition-all duration-1000 ease-in-out"
         style={{
             backgroundImage: activeSession?.backgroundImageUrl ? `url(${activeSession.backgroundImageUrl})` : 'none'
         }}
