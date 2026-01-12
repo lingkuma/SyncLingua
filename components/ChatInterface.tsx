@@ -1,7 +1,7 @@
 
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare } from 'lucide-react';
+import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare, Menu, PanelLeftOpen } from 'lucide-react';
 import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate } from '../types';
 import { streamChat, generateAuxiliaryResponse, generateSpeech, generateSceneImage } from '../services/geminiService';
 import { saveImageToCache } from '../services/imageDb';
@@ -14,6 +14,10 @@ interface ChatInterfaceProps {
   imageTemplates: ImageTemplate[];
   settings: AppSettings;
   mainPreset?: Preset;
+  isSidebarOpen?: boolean;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
+  onExpandSidebar?: () => void;
 }
 
 const MessageBubble: React.FC<{ 
@@ -89,7 +93,7 @@ const MessageBubble: React.FC<{
     );
 };
 
-export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSession, auxPresets, systemTemplates, imageTemplates, settings, mainPreset }) => {
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSession, auxPresets, systemTemplates, imageTemplates, settings, mainPreset, isSidebarOpen, isSidebarCollapsed, onToggleSidebar, onExpandSidebar }) => {
   const [inputMain, setInputMain] = useState('');
   const [inputAux, setInputAux] = useState('');
   const [isGeneratingMain, setIsGeneratingMain] = useState(false);
@@ -605,9 +609,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             <div className={`w-full md:w-1/2 flex flex-col border-r border-white/10 dark:border-white/5 transition-all duration-300 ${
                 mobileView === 'aux' ? 'hidden md:flex' : 'flex'
             } ${session.backgroundImageUrl ? 'bg-transparent' : 'bg-white dark:bg-neutral-950'}`}>
-                <div className="h-14 border-b border-white/10 dark:border-white/5 flex items-center px-4 bg-transparent justify-between shrink-0">
-                    <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                <div className="h-14 border-b border-white/10 dark:border-white/5 flex items-center px-2 md:px-4 bg-transparent justify-between shrink-0">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {/* Mobile Menu Button */}
+                        <button 
+                            onClick={onToggleSidebar}
+                            className="md:hidden p-2 rounded-lg hover:bg-white/20 dark:hover:bg-black/20 text-gray-600 dark:text-gray-300 transition-colors shrink-0"
+                            title="Open Menu"
+                        >
+                            <Menu size={20} />
+                        </button>
+                        
+                        {/* Desktop Expand Sidebar Button */}
+                        {isSidebarCollapsed && onExpandSidebar && (
+                            <button 
+                                onClick={onExpandSidebar}
+                                className="hidden md:flex p-2 rounded-lg hover:bg-white/20 dark:hover:bg-black/20 text-gray-500 dark:text-gray-300 transition-colors shrink-0"
+                                title="Expand Sidebar"
+                            >
+                                <PanelLeftOpen size={20} />
+                            </button>
+                        )}
+                        
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
                         <h3 className="font-semibold text-gray-800 dark:text-gray-200 truncate drop-shadow-sm">
                             {mainPreset ? mainPreset.title : 'Main Conversation'}
                         </h3>

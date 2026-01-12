@@ -498,15 +498,6 @@ const App: React.FC = () => {
             ></div>
         )}
 
-        {/* FLOATING MENU BUTTON (Mobile Only) */}
-        <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-white/20 dark:bg-black/40 hover:bg-white/40 dark:hover:bg-black/60 text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-300 backdrop-blur-md shadow-sm border border-white/10 transition-all"
-            title="Open Menu"
-        >
-            <Menu size={24} />
-        </button>
-
       {/* SIDEBAR - FULLY TRANSPARENT */}
       <div className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/10 dark:border-white/5 bg-transparent transform transition-all duration-300 ease-in-out overflow-hidden ${
             isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -647,18 +638,6 @@ const App: React.FC = () => {
 
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 pt-0 md:pt-0 transition-all duration-300">
-        
-        {/* Expand Sidebar Button (Desktop Only, Floating over content) */}
-        {isSidebarCollapsed && (
-             <button 
-                onClick={() => setIsSidebarCollapsed(false)} 
-                className="hidden md:flex absolute top-3 left-3 z-50 p-2 rounded-lg bg-white/20 dark:bg-black/40 hover:bg-white/40 dark:hover:bg-black/60 text-gray-500 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-300 backdrop-blur-md shadow-sm border border-white/10 transition-all"
-                title="Expand Sidebar"
-             >
-                <PanelLeftOpen size={20} />
-             </button>
-        )}
-
         {activeSession ? (
             <ChatInterface 
                 session={activeSession}
@@ -668,6 +647,10 @@ const App: React.FC = () => {
                 imageTemplates={imageTemplates}
                 settings={settings}
                 mainPreset={activeMainPreset}
+                isSidebarOpen={isSidebarOpen}
+                isSidebarCollapsed={isSidebarCollapsed}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                onExpandSidebar={() => setIsSidebarCollapsed(false)}
             />
         ) : (
             // DASHBOARD VIEW - TRANSPARENT
