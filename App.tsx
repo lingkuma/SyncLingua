@@ -480,7 +480,7 @@ const App: React.FC = () => {
   return (
     // Global Background Container
     <div 
-        className="flex h-screen w-screen bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100 font-sans overflow-hidden bg-cover bg-center transition-all duration-1000 ease-in-out"
+        className="flex h-[calc(100vh+1px)] md:h-screen w-screen bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100 font-sans bg-cover bg-center transition-all duration-1000 ease-in-out"
         style={{
             backgroundImage: activeSession?.backgroundImageUrl ? `url(${activeSession.backgroundImageUrl})` : 'none'
         }}
@@ -671,7 +671,24 @@ const App: React.FC = () => {
             />
         ) : (
             // DASHBOARD VIEW - TRANSPARENT
-            <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto bg-transparent">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto bg-transparent relative">
+                {/* Expand Sidebar Button - Mobile: show when sidebar is closed, Desktop: show when sidebar is collapsed */}
+                {(!isSidebarOpen || isSidebarCollapsed) && (
+                    <button 
+                        onClick={() => {
+                            if (!isSidebarOpen) {
+                                setIsSidebarOpen(true);
+                            } else {
+                                setIsSidebarCollapsed(false);
+                            }
+                        }}
+                        className="absolute top-4 left-4 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-black/20 text-gray-500 dark:text-gray-300 transition-colors z-20"
+                        title="展开侧栏"
+                    >
+                        <PanelLeftOpen size={20} />
+                    </button>
+                )}
+                
                 <div className="w-16 h-16 bg-white dark:bg-neutral-900 rounded-2xl flex items-center justify-center mb-6 shadow-xl dark:shadow-indigo-900/10 border border-gray-100 dark:border-neutral-800">
                     <MessageSquare size={32} className="text-indigo-600 dark:text-indigo-500" />
                 </div>
