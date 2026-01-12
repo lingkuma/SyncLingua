@@ -488,30 +488,24 @@ const App: React.FC = () => {
       {/* Overlay to darken background slightly for text readability, NO BLUR as requested */}
       <div className={`absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000 ${activeSession?.backgroundImageUrl ? 'bg-black/30' : 'opacity-0'}`}></div>
 
-      {/* MOBILE HEADER - Only visible on small screens */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/90 dark:bg-neutral-900/90 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 z-40 justify-between">
-         <div className="flex items-center gap-3">
-             <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600 dark:text-gray-300">
-                 <Menu size={24} />
-             </button>
-             <span className="font-bold text-lg text-gray-900 dark:text-gray-100">SyncLingua</span>
-         </div>
-         <button 
-             onClick={toggleFullscreen}
-             className="text-gray-600 dark:text-gray-300 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
-             title={isFullscreen ? "退出全屏" : "全屏模式"}
-         >
-             {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-         </button>
-      </div>
+
 
       {/* MOBILE OVERLAY */}
-      {isSidebarOpen && (
-          <div 
-             className="md:hidden fixed inset-0 bg-black/50 z-40"
-             onClick={() => setIsSidebarOpen(false)}
-          ></div>
-      )}
+        {isSidebarOpen && (
+            <div 
+               className="md:hidden fixed inset-0 bg-black/50 z-40"
+               onClick={() => setIsSidebarOpen(false)}
+            ></div>
+        )}
+
+        {/* FLOATING MENU BUTTON (Mobile Only) */}
+        <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-white/20 dark:bg-black/40 hover:bg-white/40 dark:hover:bg-black/60 text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-300 backdrop-blur-md shadow-sm border border-white/10 transition-all"
+            title="Open Menu"
+        >
+            <Menu size={24} />
+        </button>
 
       {/* SIDEBAR - FULLY TRANSPARENT */}
       <div className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/10 dark:border-white/5 bg-transparent transform transition-all duration-300 ease-in-out overflow-hidden ${
@@ -534,8 +528,8 @@ const App: React.FC = () => {
                     </div>
                     <h1 className="font-bold text-lg tracking-tight text-gray-900 dark:text-gray-100 drop-shadow-sm">SyncLingua</h1>
                 </div>
-                {/* Action Buttons (Desktop Only) */}
-                <div className="hidden md:flex items-center gap-1">
+                {/* Action Buttons */}
+                <div className="flex items-center gap-1">
                     <button 
                         onClick={toggleFullscreen}
                         className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
@@ -545,7 +539,7 @@ const App: React.FC = () => {
                     </button>
                     <button 
                         onClick={() => setIsSidebarCollapsed(true)} 
-                        className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
+                        className="hidden md:flex text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
                         title="Collapse Sidebar"
                     >
                         <PanelLeftClose size={18} />
@@ -652,7 +646,7 @@ const App: React.FC = () => {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 pt-14 md:pt-0 transition-all duration-300">
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 pt-0 md:pt-0 transition-all duration-300">
         
         {/* Expand Sidebar Button (Desktop Only, Floating over content) */}
         {isSidebarCollapsed && (
