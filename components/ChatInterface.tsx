@@ -817,11 +817,29 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                 </div>
 
                 {/* AUX CHAT AREA */}
-                <div className="flex-1 flex flex-col min-h-0 bg-transparent">
+                <div className="flex-1 flex flex-col min-h-0 bg-transparent relative">
                     {activeAuxTab ? (
                         <>
-                            {/* TOOLBAR */}
-                            <div className="h-10 border-b border-white/10 dark:border-white/5 flex items-center justify-between px-4 bg-transparent shrink-0">
+                            {/* FLOATING BUTTONS - Mobile Only */}
+                            <div className="absolute top-3 right-3 z-10 flex items-center gap-2 md:hidden">
+                                {activeAuxPreset?.autoTrigger ? (
+                                    <span className="text-amber-500" title="Auto-Responds to AI">
+                                        <Zap size={16} />
+                                    </span>
+                                ) : (
+                                    <span className="text-emerald-500" title="Monitoring Context">●</span>
+                                )}
+                                <button 
+                                    onClick={clearAuxContext}
+                                    title="Clear history for this helper (keeps context)"
+                                    className="p-2 bg-white/80 dark:bg-black/60 backdrop-blur-sm rounded-full hover:bg-white/90 dark:hover:bg-black/80 transition-colors text-gray-600 dark:text-gray-300"
+                                >
+                                    <RefreshCw size={14} />
+                                </button>
+                            </div>
+
+                            {/* TOOLBAR - Desktop Only */}
+                            <div className="hidden md:flex h-10 border-b border-white/10 dark:border-white/5 items-center justify-between px-4 bg-transparent shrink-0">
                                 <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                                     {activeAuxPreset?.autoTrigger ? (
                                         <>
