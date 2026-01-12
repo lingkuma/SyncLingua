@@ -135,15 +135,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   // Auto-resize effects
   useEffect(() => {
     if (textareaMainRef.current) {
-        textareaMainRef.current.style.height = 'auto';
-        textareaMainRef.current.style.height = `${textareaMainRef.current.scrollHeight}px`;
+        const hasContent = inputMain.trim().length > 0;
+        if (hasContent) {
+            textareaMainRef.current.style.height = 'auto';
+            const newHeight = Math.min(textareaMainRef.current.scrollHeight, 160); // max-h-40 = 160px
+            textareaMainRef.current.style.height = `${newHeight}px`;
+        } else {
+            textareaMainRef.current.style.height = '46px'; // min-h-[46px]
+        }
     }
   }, [inputMain]);
 
   useEffect(() => {
     if (textareaAuxRef.current) {
-        textareaAuxRef.current.style.height = 'auto';
-        textareaAuxRef.current.style.height = `${textareaAuxRef.current.scrollHeight}px`;
+        const hasContent = inputAux.trim().length > 0;
+        if (hasContent) {
+            textareaAuxRef.current.style.height = 'auto';
+            const newHeight = Math.min(textareaAuxRef.current.scrollHeight, 160); // max-h-40 = 160px
+            textareaAuxRef.current.style.height = `${newHeight}px`;
+        } else {
+            textareaAuxRef.current.style.height = '46px'; // min-h-[46px]
+        }
     }
   }, [inputAux]);
 
