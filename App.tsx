@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen, Maximize, Minimize } from 'lucide-react';
 import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, ImageTemplate, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
@@ -241,6 +241,31 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  const toggleFullscreen = () => {
+      if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(err => {
+              console.error(`Error attempting to enable fullscreen: ${err.message}`);
+          });
+          setIsFullscreen(true);
+      } else {
+          if (document.exitFullscreen) {
+              document.exitFullscreen();
+              setIsFullscreen(false);
+          }
+      }
+  };
+
+  useEffect(() => {
+      const handleFullscreenChange = () => {
+          setIsFullscreen(!!document.fullscreenElement);
+      };
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      return () => {
+          document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      };
+  }, []);
   
   // Custom Confirmation/Input Modal State
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
@@ -471,6 +496,13 @@ const App: React.FC = () => {
              </button>
              <span className="font-bold text-lg text-gray-900 dark:text-gray-100">SyncLingua</span>
          </div>
+         <button 
+             onClick={toggleFullscreen}
+             className="text-gray-600 dark:text-gray-300 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+             title={isFullscreen ? "退出全屏" : "全屏模式"}
+         >
+             {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+         </button>
       </div>
 
       {/* MOBILE OVERLAY */}
@@ -502,14 +534,23 @@ const App: React.FC = () => {
                     </div>
                     <h1 className="font-bold text-lg tracking-tight text-gray-900 dark:text-gray-100 drop-shadow-sm">SyncLingua</h1>
                 </div>
-                {/* Collapse Button (Desktop Only) */}
-                <button 
-                    onClick={() => setIsSidebarCollapsed(true)} 
-                    className="hidden md:flex text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
-                    title="Collapse Sidebar"
-                >
-                    <PanelLeftClose size={18} />
-                </button>
+                {/* Action Buttons (Desktop Only) */}
+                <div className="hidden md:flex items-center gap-1">
+                    <button 
+                        onClick={toggleFullscreen}
+                        className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
+                        title={isFullscreen ? "退出全屏" : "全屏模式"}
+                    >
+                        {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                    </button>
+                    <button 
+                        onClick={() => setIsSidebarCollapsed(true)} 
+                        className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
+                        title="Collapse Sidebar"
+                    >
+                        <PanelLeftClose size={18} />
+                    </button>
+                </div>
             </div>
 
             {/* Navigation */}
