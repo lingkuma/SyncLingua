@@ -609,7 +609,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             <div className={`w-full md:w-1/2 flex flex-col border-r border-white/10 dark:border-white/5 transition-all duration-300 ${
                 mobileView === 'aux' ? 'hidden md:flex' : 'flex'
             } ${session.backgroundImageUrl ? 'bg-transparent' : 'bg-white dark:bg-neutral-950'}`}>
-                <div className="h-14 border-b border-white/10 dark:border-white/5 flex items-center px-2 md:px-4 bg-transparent justify-between shrink-0">
+                <div className="h-11 border-b border-white/10 dark:border-white/5 flex items-center px-2 md:px-4 bg-transparent justify-between shrink-0">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         {/* Mobile Menu Button */}
                         <button 
@@ -772,7 +772,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                 mobileView === 'main' ? 'hidden md:flex' : 'flex'
             }`}>
                 {/* AUX TABS HEADER */}
-                <div className="h-14 border-b border-white/10 dark:border-white/5 flex items-center bg-transparent overflow-x-auto custom-scrollbar shrink-0">
+                <div className="h-11 border-b border-white/10 dark:border-white/5 flex items-center bg-transparent overflow-x-auto custom-scrollbar shrink-0">
                     {session.auxTabs.map(tab => {
                         const preset = auxPresets.find(p => p.id === tab.presetId);
                         const isGenerating = auxGeneratingIds.has(tab.id);
