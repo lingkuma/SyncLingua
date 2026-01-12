@@ -773,6 +773,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             }`}>
                 {/* AUX TABS HEADER */}
                 <div className="h-11 border-b border-white/10 dark:border-white/5 flex items-center bg-transparent overflow-x-auto custom-scrollbar shrink-0">
+                    <button 
+                        onClick={onToggleSidebar}
+                        className="md:hidden p-2 rounded-lg hover:bg-white/20 dark:hover:bg-black/20 text-gray-600 dark:text-gray-300 transition-colors shrink-0 mr-1"
+                        title="Open Menu"
+                    >
+                        <Menu size={20} />
+                    </button>
                     {session.auxTabs.map(tab => {
                         const preset = auxPresets.find(p => p.id === tab.presetId);
                         const isGenerating = auxGeneratingIds.has(tab.id);
