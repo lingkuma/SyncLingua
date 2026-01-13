@@ -26,7 +26,8 @@ const MessageBubble: React.FC<{
     isPlaying: boolean;
     isLoadingTTS: boolean;
     isLastInGroup?: boolean; // For visual grouping in aux
-}> = ({ msg, onPlayTTS, isPlaying, isLoadingTTS, isLastInGroup = true }) => {
+    onSendToMain?: (text: string) => void; // Optional callback to send to main chat
+}> = ({ msg, onPlayTTS, isPlaying, isLoadingTTS, isLastInGroup = true, onSendToMain }) => {
     // Determine opacity based on auto-trigger history status
     // If it's an auto-trigger message and NOT the last one, fade it out significantly
     const isAuto = msg.isAutoTrigger;
@@ -71,6 +72,15 @@ const MessageBubble: React.FC<{
             <div className={`flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity ${
                  msg.role === 'user' ? 'flex-row-reverse' : ''
             }`}>
+                {onSendToMain && (
+                    <button 
+                        onClick={() => onSendToMain(msg.text)}
+                        className="p-1.5 rounded-md hover:bg-gray-200/50 dark:hover:bg-slate-800/50 transition-colors text-gray-500 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-300"
+                        title="Send to Main Chat"
+                    >
+                        <Send size={14} />
+                    </button>
+                )}
                 <button 
                     onClick={() => onPlayTTS(msg.text, msg.id)}
                     disabled={isLoadingTTS}
@@ -444,6 +454,107 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             next.delete(tab.id);
             return next;
         });
+      }
+  };
+
+  const handleSendToMain = async (text: string) => {
+      if (!text.trim() || isGeneratingMain) return;
+      if (!settings.apiKey) {
+          alert("Please set your Google Gemini API Key in Settings first.");
+          return;
+      }
+      
+      const newUserMsg: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          text: text,
+          timestamp: Date.now()
+      };
+
+      const updatedMessages = [...session.mainMessages, newUserMsg];
+      updateSession({ ...session, mainMessages: updatedMessages });
+      setIsGeneratingMain(true);
+
+      // 1. Get Base Template Content
+      const templateContent = mainPreset?.systemTemplateId 
+          ? systemTemplates.find(t => t.id === mainPreset.systemTemplateId)?.content || ''
+          : '';
+
+      // 2. Get Private Persona
+      const privateSystem = mainPreset?.systemPrompt || 'You are a helpful assistant.';
+      
+      // 3. Get Shared Context
+      const sharedContext = mainPreset?.sharedPrompt || '';
+      
+      // 4. Combine Private Instructions (Template + Persona)
+      const combinedPrivate = [templateContent, privateSystem]
+          .filter(s => s.trim().length > 0)
+          .join('\n\n---\n\n');
+
+      // 5. Final Assembly
+      const fullSystemInstruction = sharedContext 
+          ? `${combinedPrivate}\n\n[CONTEXT/SCENARIO]: ${sharedContext}` 
+          : combinedPrivate;
+
+      const botMsgId = (Date.now() + 1).toString();
+      
+      let currentBotText = '';
+      let finalFullText = '';
+      
+      try {
+          const fullResponse = await streamChat(
+              settings.apiKey,
+              settings.model,
+              fullSystemInstruction,
+              updatedMessages, 
+              newUserMsg.text,
+              settings.temperature,
+              (chunk) => {
+                  currentBotText += chunk;
+                  updateSession({
+                      ...sessionRef.current,
+                      mainMessages: [
+                          ...updatedMessages,
+                          { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                      ]
+                  });
+              }
+          );
+          finalFullText = fullResponse;
+
+          // Auto-play TTS if enabled in preset
+          if (mainPreset?.ttsConfig?.autoPlay && fullResponse) {
+               setTimeout(() => {
+                   handleTTS(fullResponse, botMsgId, mainPreset.ttsConfig?.voiceName);
+               }, 100);
+          }
+
+      } catch (e) {
+          updateSession({
+              ...session,
+              mainMessages: [
+                  ...updatedMessages,
+                  { id: botMsgId, role: 'model' as const, text: "[Error generating response. Please check API Key in Settings.]", timestamp: Date.now() }
+              ]
+          });
+      } finally {
+          setIsGeneratingMain(false);
+          
+          if (finalFullText) {
+              const finalMainHistory = [...updatedMessages, { id: botMsgId, role: 'model' as const, text: finalFullText, timestamp: Date.now() }];
+              
+              // --- CHECK AND TRIGGER AUTO-AUX ---
+              const autoTabs = session.auxTabs.filter(t => {
+                  const preset = auxPresets.find(p => p.id === t.presetId);
+                  return preset?.autoTrigger === true;
+              });
+              if (autoTabs.length > 0) {
+                  autoTabs.forEach(tab => triggerAutoAuxResponse(tab, finalMainHistory));
+              }
+
+              // --- CHECK AND TRIGGER IMAGE GEN ---
+              handleSceneImageGeneration(finalMainHistory);
+          }
       }
   };
 
@@ -1015,6 +1126,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                         isPlaying={playingMessageId === m.id}
                                         isLoadingTTS={loadingTTSId === m.id}
                                         isLastInGroup={idx >= arr.length - 2} // Crude approximation for "last interaction"
+                                        onSendToMain={handleSendToMain}
                                     />
                                 ))}
                                 <div ref={auxEndRef} />
