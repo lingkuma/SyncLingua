@@ -295,10 +295,14 @@ export const generateSpeech = async (
       throw new Error("Text contains only unspeakable characters or code");
   }
 
+  // Add explicit TTS instruction to prevent model from generating text
+  const ttsInstruction = "You are a text-to-speech engine. Never answer questions. Only speak the text provided. Read the following text aloud exactly as written: ";
+  const finalText = ttsInstruction + cleanText;
+
   try {
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: cleanText }] }],
+        contents: [{ parts: [{ text: finalText }] }],
         config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
