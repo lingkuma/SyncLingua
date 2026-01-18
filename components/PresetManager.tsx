@@ -1,8 +1,8 @@
 
 
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Edit2, Check, Volume2, Zap, Globe, Lock, LayoutTemplate, Image as ImageIcon } from 'lucide-react';
-import { Preset, SessionPreset, SystemTemplate, ImageTemplate, GEMINI_TTS_VOICES } from '../types';
+import { X, Plus, Trash2, Edit2, Check, Volume2, Zap, Globe, Lock, LayoutTemplate, Image as ImageIcon, Settings as SettingsIcon } from 'lucide-react';
+import { Preset, SessionPreset, SystemTemplate, ImageTemplate, GEMINI_TTS_VOICES, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, AppSettings } from '../types';
 
 interface PresetManagerProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface PresetManagerProps {
   sessionPresets: SessionPreset[];
   systemTemplates: SystemTemplate[];
   imageTemplates: ImageTemplate[];
+  settings: AppSettings;
   setPresets: (p: Preset[]) => void;
   setSessionPresets: (sp: SessionPreset[]) => void;
   setSystemTemplates: (st: SystemTemplate[]) => void;
@@ -18,7 +19,7 @@ interface PresetManagerProps {
 }
 
 export const PresetManager: React.FC<PresetManagerProps> = ({ 
-  isOpen, onClose, presets, sessionPresets, systemTemplates, imageTemplates,
+  isOpen, onClose, presets, sessionPresets, systemTemplates, imageTemplates, settings,
   setPresets, setSessionPresets, setSystemTemplates, setImageTemplates
 }) => {
   const [activeTab, setActiveTab] = useState<'template' | 'image_template' | 'main' | 'aux' | 'session'>('main');
@@ -37,7 +38,8 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
     const ttsConfig = editingPreset.ttsConfig || (activeTab === 'main' ? {
         enabled: true,
         voiceName: 'Zephyr',
-        autoPlay: false
+        autoPlay: false,
+        provider: 'gemini' as const
     } : undefined);
     
     // Ensure Image Config exists if main mode
@@ -587,43 +589,273 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                             <Volume2 size={16} />
                                             <span className="text-sm font-semibold uppercase tracking-wider">Text-to-Speech Config</span>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-4">
                                             <div>
-                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Voice</label>
+                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">TTS Provider</label>
                                                 <select
-                                                    value={editingPreset?.ttsConfig?.voiceName || 'Puck'}
+                                                    value={editingPreset?.ttsConfig?.provider || 'gemini'}
                                                     onChange={e => setEditingPreset(prev => ({ 
                                                         ...prev, 
                                                         ttsConfig: { 
+                                                            ...prev?.ttsConfig,
                                                             enabled: prev?.ttsConfig?.enabled ?? true,
                                                             autoPlay: prev?.ttsConfig?.autoPlay ?? false,
-                                                            voiceName: e.target.value
+                                                            voiceName: prev?.ttsConfig?.voiceName || 'Puck',
+                                                            provider: e.target.value as 'gemini' | 'minimax' | 'minimax-default',
+                                                            minimaxConfig: e.target.value === 'minimax' ? prev?.ttsConfig?.minimaxConfig || MINIMAX_DEFAULT_CONFIG : undefined
                                                         } 
                                                     }))}
                                                     className="w-full bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded px-2 py-2 text-sm text-gray-900 dark:text-gray-200"
                                                 >
-                                                    {GEMINI_TTS_VOICES.map(v => (
-                                                        <option key={v.id} value={v.id}>{v.name}</option>
-                                                    ))}
+                                                    <option value="gemini">Gemini</option>
+                                                    <option value="minimax">MINIMAX (自定义)</option>
+                                                    <option value="minimax-default">MINIMAX (默认)</option>
                                                 </select>
+                                                {editingPreset?.ttsConfig?.provider === 'minimax-default' && settings.minimaxDefaultConfig && (
+                                                    <div className="mt-2 flex items-center gap-2 text-xs text-purple-600 dark:text-purple-400">
+                                                        <SettingsIcon size={12} />
+                                                        <span>使用全局配置: {settings.minimaxDefaultConfig.apiKey ? '已配置' : '未配置'}</span>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="flex items-center gap-2 mt-5">
-                                                <input 
-                                                    type="checkbox"
-                                                    id="autoplay"
-                                                    checked={editingPreset?.ttsConfig?.autoPlay || false}
-                                                    onChange={e => setEditingPreset(prev => ({ 
-                                                        ...prev, 
-                                                        ttsConfig: { 
-                                                            enabled: prev?.ttsConfig?.enabled ?? true,
-                                                            voiceName: prev?.ttsConfig?.voiceName || 'Puck',
-                                                            autoPlay: e.target.checked
-                                                        } 
-                                                    }))}
-                                                    className="w-4 h-4 rounded bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-600 accent-indigo-500"
-                                                />
-                                                <label htmlFor="autoplay" className="text-sm text-gray-700 dark:text-gray-300">Auto-play Responses</label>
-                                            </div>
+
+                                            {editingPreset?.ttsConfig?.provider === 'gemini' && (
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Voice</label>
+                                                        <select
+                                                            value={editingPreset?.ttsConfig?.voiceName || 'Puck'}
+                                                            onChange={e => setEditingPreset(prev => ({ 
+                                                                ...prev, 
+                                                                ttsConfig: { 
+                                                                    ...prev?.ttsConfig,
+                                                                    enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                    autoPlay: prev?.ttsConfig?.autoPlay ?? false,
+                                                                    voiceName: e.target.value
+                                                                } 
+                                                            }))}
+                                                            className="w-full bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded px-2 py-2 text-sm text-gray-900 dark:text-gray-200"
+                                                        >
+                                                            {GEMINI_TTS_VOICES.map(v => (
+                                                                <option key={v.id} value={v.id}>{v.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-5">
+                                                        <input 
+                                                            type="checkbox"
+                                                            id="autoplay"
+                                                            checked={editingPreset?.ttsConfig?.autoPlay || false}
+                                                            onChange={e => setEditingPreset(prev => ({ 
+                                                                ...prev, 
+                                                                ttsConfig: { 
+                                                                    ...prev?.ttsConfig,
+                                                                    enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                    voiceName: prev?.ttsConfig?.voiceName || 'Puck',
+                                                                    autoPlay: e.target.checked
+                                                                } 
+                                                            }))}
+                                                            className="w-4 h-4 rounded bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-600 accent-indigo-500"
+                                                        />
+                                                        <label htmlFor="autoplay" className="text-sm text-gray-700 dark:text-gray-300">Auto-play Responses</label>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {editingPreset?.ttsConfig?.provider === 'minimax' && (
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">API Key</label>
+                                                        <input
+                                                            type="password"
+                                                            value={editingPreset?.ttsConfig?.minimaxConfig?.apiKey || ''}
+                                                            onChange={e => setEditingPreset(prev => ({ 
+                                                                ...prev, 
+                                                                ttsConfig: { 
+                                                                    ...prev?.ttsConfig,
+                                                                    enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                    autoPlay: prev?.ttsConfig?.autoPlay ?? false,
+                                                                    minimaxConfig: {
+                                                                        ...prev?.ttsConfig?.minimaxConfig,
+                                                                        apiKey: e.target.value
+                                                                    }
+                                                                } 
+                                                            }))}
+                                                            className="w-full bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded px-2 py-2 text-sm text-gray-900 dark:text-gray-200"
+                                                            placeholder="Enter MINIMAX API Key"
+                                                        />
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Voice</label>
+                                                            <select
+                                                                value={editingPreset?.ttsConfig?.minimaxConfig?.voiceId || 'female-tianmei'}
+                                                                onChange={e => setEditingPreset(prev => ({ 
+                                                                    ...prev, 
+                                                                    ttsConfig: { 
+                                                                        ...prev?.ttsConfig,
+                                                                        enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                        autoPlay: prev?.ttsConfig?.autoPlay ?? false,
+                                                                        minimaxConfig: {
+                                                                            ...prev?.ttsConfig?.minimaxConfig,
+                                                                            voiceId: e.target.value
+                                                                        }
+                                                                    } 
+                                                                }))}
+                                                                className="w-full bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded px-2 py-2 text-sm text-gray-900 dark:text-gray-200"
+                                                            >
+                                                                {MINIMAX_VOICES.map(v => (
+                                                                    <option key={v.id} value={v.id}>{v.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Model</label>
+                                                            <select
+                                                                value={editingPreset?.ttsConfig?.minimaxConfig?.model || 'speech-01-turbo'}
+                                                                onChange={e => setEditingPreset(prev => ({ 
+                                                                    ...prev, 
+                                                                    ttsConfig: { 
+                                                                        ...prev?.ttsConfig,
+                                                                        enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                        autoPlay: prev?.ttsConfig?.autoPlay ?? false,
+                                                                        minimaxConfig: {
+                                                                            ...prev?.ttsConfig?.minimaxConfig,
+                                                                            model: e.target.value
+                                                                        }
+                                                                    } 
+                                                                }))}
+                                                                className="w-full bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded px-2 py-2 text-sm text-gray-900 dark:text-gray-200"
+                                                            >
+                                                                {MINIMAX_MODELS.map(m => (
+                                                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Emotion</label>
+                                                            <select
+                                                                value={editingPreset?.ttsConfig?.minimaxConfig?.emotion || 'happy'}
+                                                                onChange={e => setEditingPreset(prev => ({ 
+                                                                    ...prev, 
+                                                                    ttsConfig: { 
+                                                                        ...prev?.ttsConfig,
+                                                                        enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                        autoPlay: prev?.ttsConfig?.autoPlay ?? false,
+                                                                        minimaxConfig: {
+                                                                            ...prev?.ttsConfig?.minimaxConfig,
+                                                                            emotion: e.target.value
+                                                                        }
+                                                                    } 
+                                                                }))}
+                                                                className="w-full bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded px-2 py-2 text-sm text-gray-900 dark:text-gray-200"
+                                                            >
+                                                                {MINIMAX_EMOTIONS.map(e => (
+                                                                    <option key={e.id} value={e.id}>{e.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Language Boost</label>
+                                                            <select
+                                                                value={editingPreset?.ttsConfig?.minimaxConfig?.languageBoost || 'zh'}
+                                                                onChange={e => setEditingPreset(prev => ({ 
+                                                                    ...prev, 
+                                                                    ttsConfig: { 
+                                                                        ...prev?.ttsConfig,
+                                                                        enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                        autoPlay: prev?.ttsConfig?.autoPlay ?? false,
+                                                                        minimaxConfig: {
+                                                                            ...prev?.ttsConfig?.minimaxConfig,
+                                                                            languageBoost: e.target.value
+                                                                        }
+                                                                    } 
+                                                                }))}
+                                                                className="w-full bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded px-2 py-2 text-sm text-gray-900 dark:text-gray-200"
+                                                            >
+                                                                <option value="zh">Chinese</option>
+                                                                <option value="en">English</option>
+                                                                <option value="ja">Japanese</option>
+                                                                <option value="ko">Korean</option>
+                                                                <option value="es">Spanish</option>
+                                                                <option value="fr">French</option>
+                                                                <option value="de">German</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Speed: {editingPreset?.ttsConfig?.minimaxConfig?.speed?.toFixed(1) || '1.0'}</label>
+                                                        <input
+                                                            type="range"
+                                                            min="0.5"
+                                                            max="2.0"
+                                                            step="0.1"
+                                                            value={editingPreset?.ttsConfig?.minimaxConfig?.speed || 1.0}
+                                                            onChange={e => setEditingPreset(prev => ({ 
+                                                                ...prev, 
+                                                                ttsConfig: { 
+                                                                    ...prev?.ttsConfig,
+                                                                    enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                    autoPlay: prev?.ttsConfig?.autoPlay ?? false,
+                                                                    minimaxConfig: {
+                                                                        ...prev?.ttsConfig?.minimaxConfig,
+                                                                        speed: parseFloat(e.target.value)
+                                                                    }
+                                                                } 
+                                                            }))}
+                                                            className="w-full accent-indigo-500"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">API Endpoint</label>
+                                                        <input
+                                                            type="text"
+                                                            value={editingPreset?.ttsConfig?.minimaxConfig?.apiEndpoint || MINIMAX_DEFAULT_CONFIG.apiEndpoint}
+                                                            onChange={e => setEditingPreset(prev => ({ 
+                                                                ...prev, 
+                                                                ttsConfig: { 
+                                                                    ...prev?.ttsConfig,
+                                                                    enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                    autoPlay: prev?.ttsConfig?.autoPlay ?? false,
+                                                                    minimaxConfig: {
+                                                                        ...prev?.ttsConfig?.minimaxConfig,
+                                                                        apiEndpoint: e.target.value
+                                                                    }
+                                                                } 
+                                                            }))}
+                                                            className="w-full bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded px-2 py-2 text-sm text-gray-900 dark:text-gray-200"
+                                                            placeholder="https://api.minimax.chat/v1/text_to_speech"
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        <input 
+                                                            type="checkbox"
+                                                            id="minimax-autoplay"
+                                                            checked={editingPreset?.ttsConfig?.autoPlay || false}
+                                                            onChange={e => setEditingPreset(prev => ({ 
+                                                                ...prev, 
+                                                                ttsConfig: { 
+                                                                    ...prev?.ttsConfig,
+                                                                    enabled: prev?.ttsConfig?.enabled ?? true,
+                                                                    minimaxConfig: prev?.ttsConfig?.minimaxConfig,
+                                                                    autoPlay: e.target.checked
+                                                                } 
+                                                            }))}
+                                                            className="w-4 h-4 rounded bg-white dark:bg-neutral-900 border-gray-300 dark:border-neutral-600 accent-indigo-500"
+                                                        />
+                                                        <label htmlFor="minimax-autoplay" className="text-sm text-gray-700 dark:text-gray-300">Auto-play Responses</label>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}

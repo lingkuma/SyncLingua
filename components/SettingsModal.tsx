@@ -1,8 +1,8 @@
 
 
 import React, { useRef, useState } from 'react';
-import { X, Settings as SettingsIcon, Download, Upload, Key, Eye, EyeOff, Sun, Moon, Monitor, Cloud, CloudUpload, CloudDownload, RefreshCw, Image as ImageIcon } from 'lucide-react';
-import { AppSettings, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, WebDavConfig } from '../types';
+import { X, Settings as SettingsIcon, Download, Upload, Key, Eye, EyeOff, Sun, Moon, Monitor, Cloud, CloudUpload, CloudDownload, RefreshCw, Image as ImageIcon, Volume2 } from 'lucide-react';
+import { AppSettings, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, WebDavConfig, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -133,6 +133,111 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                 )}
              </div>
+          </div>
+
+          <div className="border-t border-gray-200 dark:border-neutral-800"></div>
+
+          {/* MINIMAX Default Config */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Volume2 size={14} className="text-purple-500" /> MINIMAX Default Config
+            </h3>
+            <div className="bg-gray-50 dark:bg-neutral-850 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 space-y-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Configure default MINIMAX TTS settings. Select "MINIMAX (默认)" in preset TTS settings to use this configuration.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
+                <input
+                  type="text"
+                  value={settings.minimaxDefaultConfig?.apiKey || ''}
+                  onChange={(e) => onSave({ ...settings, minimaxDefaultConfig: { ...settings.minimaxDefaultConfig, apiKey: e.target.value } })}
+                  placeholder="Enter MINIMAX API key"
+                  className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Endpoint</label>
+                <input
+                  type="text"
+                  value={settings.minimaxDefaultConfig?.apiEndpoint || MINIMAX_DEFAULT_CONFIG.apiEndpoint}
+                  onChange={(e) => onSave({ ...settings, minimaxDefaultConfig: { ...settings.minimaxDefaultConfig, apiEndpoint: e.target.value } })}
+                  placeholder="https://api.minimax.chat/v1/text_to_speech"
+                  className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Voice</label>
+                  <select
+                    value={settings.minimaxDefaultConfig?.voiceId || MINIMAX_DEFAULT_CONFIG.voiceId}
+                    onChange={(e) => onSave({ ...settings, minimaxDefaultConfig: { ...settings.minimaxDefaultConfig, voiceId: e.target.value } })}
+                    className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                  >
+                    {MINIMAX_VOICES.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model</label>
+                  <select
+                    value={settings.minimaxDefaultConfig?.model || MINIMAX_DEFAULT_CONFIG.model}
+                    onChange={(e) => onSave({ ...settings, minimaxDefaultConfig: { ...settings.minimaxDefaultConfig, model: e.target.value } })}
+                    className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                  >
+                    {MINIMAX_MODELS.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Emotion</label>
+                  <select
+                    value={settings.minimaxDefaultConfig?.emotion || MINIMAX_DEFAULT_CONFIG.emotion}
+                    onChange={(e) => onSave({ ...settings, minimaxDefaultConfig: { ...settings.minimaxDefaultConfig, emotion: e.target.value } })}
+                    className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                  >
+                    {MINIMAX_EMOTIONS.map(e => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Language Boost</label>
+                  <select
+                    value={settings.minimaxDefaultConfig?.languageBoost || MINIMAX_DEFAULT_CONFIG.languageBoost}
+                    onChange={(e) => onSave({ ...settings, minimaxDefaultConfig: { ...settings.minimaxDefaultConfig, languageBoost: e.target.value } })}
+                    className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                  >
+                    <option value="zh">Chinese</option>
+                    <option value="en">English</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Speed</label>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{settings.minimaxDefaultConfig?.speed?.toFixed(1) || '1.0'}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={settings.minimaxDefaultConfig?.speed || MINIMAX_DEFAULT_CONFIG.speed}
+                  onChange={(e) => onSave({ ...settings, minimaxDefaultConfig: { ...settings.minimaxDefaultConfig, speed: parseFloat(e.target.value) } })}
+                  className="w-full h-2 bg-gray-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="border-t border-gray-200 dark:border-neutral-800"></div>

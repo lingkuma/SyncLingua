@@ -2,8 +2,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare, Menu, PanelLeftOpen, Mic } from 'lucide-react';
-import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate } from '../types';
+import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS } from '../types';
 import { streamChat, generateAuxiliaryResponse, generateSpeech, generateSceneImage, transcribeUserAudio } from '../services/geminiService';
+import { generateSpeechStream } from '../services/minimaxService';
 import { saveImageToCache } from '../services/imageDb';
 
 interface ChatInterfaceProps {
@@ -286,25 +287,78 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
               await audioContextRef.current.resume();
           }
 
+          // Check cache first
           let buffer = audioCache.current.get(msgId);
+          
+          // If no cache, generate new audio based on provider
           if (!buffer) {
-             // Default voice or configured voice
-             const voice = voiceName || mainPreset?.ttsConfig?.voiceName || 'Zephyr';
-             buffer = await generateSpeech(settings.apiKey, text, voice, audioContextRef.current);
-             audioCache.current.set(msgId, buffer);
+              const provider = mainPreset?.ttsConfig?.provider || 'gemini';
+              
+              if ((provider === 'minimax' || provider === 'minimax-default') && mainPreset?.ttsConfig) {
+                  // MINIMAX streaming TTS
+                  let minimaxConfig = provider === 'minimax-default' 
+                      ? settings.minimaxDefaultConfig 
+                      : mainPreset.ttsConfig.minimaxConfig;
+                  
+                  if (!minimaxConfig) {
+                      console.error('MINIMAX config not found');
+                      alert('MINIMAX TTS Failed: Configuration not found');
+                      setLoadingTTSId(null);
+                      return;
+                  }
+                  
+                  await generateSpeechStream(
+                      minimaxConfig,
+                      text,
+                      (audioBuffer) => {
+                          // Audio chunk callback - can update progress here if needed
+                      },
+                      async (fullBuffer) => {
+                          // Complete callback - cache and play the full audio
+                          try {
+                              const decodedBuffer = await audioContextRef.current!.decodeAudioData(fullBuffer.slice(0));
+                              audioCache.current.set(msgId, decodedBuffer);
+                              
+                              const source = audioContextRef.current!.createBufferSource();
+                              source.buffer = decodedBuffer;
+                              source.connect(audioContextRef.current!.destination);
+                              source.start(0);
+                              audioSourceRef.current = source;
+                              setPlayingMessageId(msgId);
+                              
+                              source.onended = () => {
+                                  setPlayingMessageId(null);
+                              };
+                          } catch (error) {
+                              console.error('Audio decode error:', error);
+                              alert('MINIMAX TTS Failed: Unable to decode audio');
+                              setPlayingMessageId(null);
+                              setLoadingTTSId(null);
+                          }
+                      }
+                  );
+                  return;
+              } else {
+                  // Gemini TTS (existing logic)
+                  const voice = voiceName || mainPreset?.ttsConfig?.voiceName || 'Zephyr';
+                  buffer = await generateSpeech(settings.apiKey, text, voice, audioContextRef.current);
+                  audioCache.current.set(msgId, buffer);
+              }
           }
 
-          const source = audioContextRef.current.createBufferSource();
-          source.buffer = buffer;
-          source.connect(audioContextRef.current.destination);
-          
-          source.onended = () => {
-              setPlayingMessageId(null);
-          };
-
-          audioSourceRef.current = source;
-          source.start();
-          setPlayingMessageId(msgId);
+          // If we have a buffer (Gemini or cached MINIMAX), play it
+          if (buffer) {
+              const source = audioContextRef.current.createBufferSource();
+              source.buffer = buffer;
+              source.connect(audioContextRef.current.destination);
+              source.start(0);
+              audioSourceRef.current = source;
+              setPlayingMessageId(msgId);
+              
+              source.onended = () => {
+                  setPlayingMessageId(null);
+              };
+          }
 
       } catch (e) {
           console.error("TTS Playback failed", e);

@@ -64,7 +64,7 @@ const INITIAL_MAIN_PRESETS: Preset[] = [
       systemTemplateId: 'st3', // Uses "Professional Service" template
       systemPrompt: 'You are a cashier at a German supermarket (Edeka). Ask for a loyalty card (DeutschlandCard). Speak only German.',
       sharedPrompt: 'The user is a customer buying groceries at a checkout counter in Berlin. It is rush hour.',
-      ttsConfig: { enabled: true, voiceName: 'Fenrir', autoPlay: true },
+      ttsConfig: { enabled: true, voiceName: 'Fenrir', autoPlay: true, provider: 'gemini' },
       backgroundImageConfig: {
           enabled: true,
           imageTemplateId: 'it2',
@@ -79,7 +79,7 @@ const INITIAL_MAIN_PRESETS: Preset[] = [
       systemTemplateId: 'st1', // Uses "Strict Roleplay"
       systemPrompt: 'You are a hiring manager at a tech company. Conduct a behavioral interview. Ask follow-up questions. Maintain a slightly intimidating tone.',
       sharedPrompt: 'The user is applying for a Senior Frontend Developer role. This is the second round of interviews.',
-      ttsConfig: { enabled: true, voiceName: 'Zephyr', autoPlay: false }
+      ttsConfig: { enabled: true, voiceName: 'Zephyr', autoPlay: false, provider: 'gemini' }
   },
 ];
 
@@ -757,6 +757,7 @@ const App: React.FC = () => {
         sessionPresets={sessionPresets}
         systemTemplates={systemTemplates}
         imageTemplates={imageTemplates}
+        settings={settings}
         setPresets={setPresets}
         setSessionPresets={setSessionPresets}
         setSystemTemplates={setSystemTemplates}

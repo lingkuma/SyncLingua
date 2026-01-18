@@ -12,6 +12,18 @@ export interface TTSConfig {
   enabled: boolean;
   voiceName: string;
   autoPlay: boolean; // Only applicable for Main AI responses
+  provider: 'gemini' | 'minimax' | 'minimax-default';
+  minimaxConfig?: MinimaxConfig;
+}
+
+export interface MinimaxConfig {
+  apiKey: string;
+  apiEndpoint: string;
+  voiceId: string;
+  model: string;
+  emotion: string;
+  languageBoost: string;
+  speed: number;
 }
 
 export interface SystemTemplate {
@@ -82,6 +94,7 @@ export interface AppSettings {
   apiKey: string;
   theme: 'auto' | 'light' | 'dark';
   webdav?: WebDavConfig;
+  minimaxDefaultConfig?: MinimaxConfig;
 }
 
 export const DEFAULT_MODELS = [
@@ -130,4 +143,42 @@ export const GEMINI_TTS_VOICES = [
   { id: 'Sadachbia', name: 'Sadachbia (Female)' },
   { id: 'Sadaltager', name: 'Sadaltager (Male)' },
   { id: 'Sulafat', name: 'Sulafat (Female)' },
+];
+
+export const MINIMAX_DEFAULT_CONFIG: MinimaxConfig = {
+  apiKey: '',
+  apiEndpoint: 'https://api.minimax.chat/v1/text_to_speech',
+  voiceId: 'female-tianmei',
+  model: 'speech-01-turbo',
+  emotion: 'happy',
+  languageBoost: 'zh',
+  speed: 1.0
+};
+
+export const MINIMAX_VOICES = [
+  { id: 'female-tianmei', name: '天美 (女声)' },
+  { id: 'male-qinggan', name: '青甘 (男声)' },
+  { id: 'female-yujie', name: '语捷 (女声)' },
+  { id: 'male-yunyang', name: '云扬 (男声)' }
+];
+
+export const MINIMAX_MODELS = [
+  { id: 'speech-2.6-hd', name: 'Speech-2.6 HD (High Quality)' },
+  { id: 'speech-2.6-turbo', name: 'Speech-2.6 Turbo (Fast)' },
+  { id: 'speech-2.5-hd', name: 'Speech-2.5 HD (High Quality)' },
+  { id: 'speech-2.5-turbo', name: 'Speech-2.5 Turbo (Fast)' },
+  { id: 'speech-02-hd', name: 'Speech-02 HD (High Quality)' },
+  { id: 'speech-02-turbo', name: 'Speech-02 Turbo (Fast)' },
+  { id: 'speech-01-hd', name: 'Speech-01 HD (High Quality)' },
+  { id: 'speech-01-turbo', name: 'Speech-01 Turbo (Fast)' },
+  { id: 'speech-01', name: 'Speech-01 (Standard)' }
+];
+
+export const MINIMAX_EMOTIONS = [
+  { id: 'happy', name: 'Happy' },
+  { id: 'sad', name: 'Sad' },
+  { id: 'angry', name: 'Angry' },
+  { id: 'fearful', name: 'Fearful' },
+  { id: 'disgusted', name: 'Disgusted' },
+  { id: 'surprised', name: 'Surprised' }
 ];
