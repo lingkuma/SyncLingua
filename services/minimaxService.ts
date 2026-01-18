@@ -5,16 +5,6 @@ const hexToArrayBuffer = (hexString: string): ArrayBuffer => {
   return bytes.buffer;
 };
 
-const waitForUpdateEnd = (sourceBuffer: SourceBuffer): Promise<void> => {
-  return new Promise(resolve => {
-    if (!sourceBuffer.updating) {
-      resolve();
-      return;
-    }
-    sourceBuffer.addEventListener('updateend', () => resolve(), { once: true });
-  });
-};
-
 export const generateSpeechStream = async (
   config: MinimaxConfig,
   text: string,
@@ -78,26 +68,6 @@ export const generateSpeechStream = async (
       await audioContext.resume();
     }
 
-    const mediaSource = new MediaSource();
-    const audioPlayer = new Audio();
-    audioPlayer.src = URL.createObjectURL(mediaSource);
-    
-    let sourceBuffer: SourceBuffer | null = null;
-    let pendingAudioData: ArrayBuffer[] = [];
-
-    await new Promise<void>(resolve => {
-      mediaSource.addEventListener('sourceopen', () => {
-        sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        sourceBuffer.addEventListener('updateend', () => {
-          if (pendingAudioData.length > 0 && !sourceBuffer!.updating) {
-            const nextChunk = pendingAudioData.shift();
-            sourceBuffer!.appendBuffer(nextChunk);
-          }
-        });
-        resolve();
-      });
-    });
-
     let initialBufferingComplete = false;
     let initialChunksCount = 0;
     const MIN_INITIAL_CHUNKS = 1;
@@ -105,21 +75,6 @@ export const generateSpeechStream = async (
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        while (pendingAudioData.length > 0) {
-          if (!sourceBuffer!.updating) {
-            const nextChunk = pendingAudioData.shift();
-            sourceBuffer!.appendBuffer(nextChunk);
-          }
-          await waitForUpdateEnd(sourceBuffer!);
-        }
-
-        if (!sourceBuffer!.updating) {
-          mediaSource.endOfStream();
-        } else {
-          sourceBuffer!.addEventListener('updateend', () => {
-            mediaSource.endOfStream();
-          }, { once: true });
-        }
         break;
       }
 
@@ -139,12 +94,6 @@ export const generateSpeechStream = async (
           if (data.data?.status === 1 && data.data?.audio) {
             const audioBuffer = hexToArrayBuffer(data.data.audio);
             fullAudioData.push(new Uint8Array(audioBuffer));
-            
-            if (sourceBuffer && !sourceBuffer.updating && pendingAudioData.length === 0) {
-              sourceBuffer.appendBuffer(audioBuffer);
-            } else {
-              pendingAudioData.push(audioBuffer);
-            }
 
             if (onChunk) {
               onChunk(audioBuffer);
@@ -154,18 +103,12 @@ export const generateSpeechStream = async (
               initialChunksCount++;
               if (initialChunksCount >= MIN_INITIAL_CHUNKS) {
                 initialBufferingComplete = true;
-                audioPlayer.play().catch(e => console.error('Play failed:', e));
               }
             }
           }
         } catch (error) {
           console.error('JSON parse error:', error);
         }
-      }
-
-      if (!initialBufferingComplete && initialChunksCount >= MIN_INITIAL_CHUNKS) {
-        initialBufferingComplete = true;
-        audioPlayer.play().catch(e => console.error('Play failed:', e));
       }
     }
 
@@ -181,10 +124,7 @@ export const generateSpeechStream = async (
       onComplete(fullBuffer.buffer);
     }
 
-    audioPlayer.addEventListener('ended', () => {
-      URL.revokeObjectURL(audioPlayer.src);
-      audioContext.close();
-    });
+    audioContext.close();
 
   } catch (error: any) {
     console.error('MINIMAX TTS API Error:', error);
