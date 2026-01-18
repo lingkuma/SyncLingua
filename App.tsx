@@ -239,9 +239,10 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); 
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   
   const toggleFullscreen = () => {
       if (!document.fullscreenElement) {
@@ -371,6 +372,25 @@ const App: React.FC = () => {
       if (itemToRename && itemToRename.title.trim() !== "") {
           setSessions(prev => prev.map(s => s.id === itemToRename.id ? { ...s, title: itemToRename.title.trim() } : s));
           setItemToRename(null);
+      }
+  }
+
+  const performDeleteAll = async () => {
+      // Clear all sessions
+      setSessions([]);
+      setActiveSessionId(null);
+      setShowDeleteAllConfirm(false);
+
+      // Clear all cached images
+      try {
+          const cacheNames = await caches.keys();
+          for (const cacheName of cacheNames) {
+              if (cacheName.includes('background-images')) {
+                  await caches.delete(cacheName);
+              }
+          }
+      } catch (e) {
+          console.warn("Failed to clear image cache", e);
       }
   }
 
@@ -585,7 +605,18 @@ const App: React.FC = () => {
 
             {/* Session List */}
             <div className="flex-1 overflow-y-auto px-2 custom-scrollbar space-y-1 pt-2 border-t border-white/10 dark:border-white/5">
-                <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recent</div>
+                <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Recent</span>
+                    {sessions.length > 0 && (
+                        <button
+                            onClick={() => setShowDeleteAllConfirm(true)}
+                            className="p-1 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-500 transition-colors"
+                            title="删除所有对话"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
+                </div>
                 {sessions.map(s => (
                     <div 
                         key={s.id}
@@ -771,17 +802,46 @@ const App: React.FC = () => {
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Conversation?</h3>
                   <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">This action cannot be undone.</p>
                   <div className="flex justify-end gap-3">
-                      <button 
+                      <button
                           onClick={() => setItemToDelete(null)}
                           className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-sm transition-colors"
                       >
                           Cancel
                       </button>
-                      <button 
+                      <button
                           onClick={performDelete}
                           className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-medium transition-colors"
                       >
                           Delete
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* DELETE ALL CONFIRMATION MODAL */}
+      {showDeleteAllConfirm && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl p-6 max-w-sm w-full shadow-2xl scale-100">
+                  <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">删除所有对话？</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-2">
+                      您即将删除 <span className="font-bold text-gray-900 dark:text-white">{sessions.length}</span> 个对话。
+                  </p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+                      此操作无法撤销，所有对话历史和背景图片都将被永久删除。
+                  </p>
+                  <div className="flex justify-end gap-3">
+                      <button
+                          onClick={() => setShowDeleteAllConfirm(false)}
+                          className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-sm transition-colors"
+                      >
+                          取消
+                      </button>
+                      <button
+                          onClick={performDeleteAll}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                          删除全部
                       </button>
                   </div>
               </div>
