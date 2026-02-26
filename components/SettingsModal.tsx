@@ -417,6 +417,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
+        {/* Version Info */}
+        <div className="px-6 pb-4 text-center">
+          <p className="text-xs text-gray-400 dark:text-gray-500 font-mono">V1.0.1</p>
+        </div>
+
         <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end bg-white dark:bg-neutral-900 sticky bottom-0">
           <button
             onClick={onClose}
