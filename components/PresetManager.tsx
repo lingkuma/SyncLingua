@@ -600,7 +600,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                                             ...prev?.ttsConfig,
                                                             enabled: prev?.ttsConfig?.enabled ?? true,
                                                             autoPlay: prev?.ttsConfig?.autoPlay ?? false,
-                                                            voiceName: prev?.ttsConfig?.voiceName || 'Puck',
+                                                            voiceName: prev?.ttsConfig?.voiceName || 'Zephyr',
                                                             provider: e.target.value as 'gemini' | 'minimax' | 'minimax-default',
                                                             minimaxConfig: e.target.value === 'minimax' ? prev?.ttsConfig?.minimaxConfig || MINIMAX_DEFAULT_CONFIG : undefined
                                                         } 
@@ -619,12 +619,12 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                                 )}
                                             </div>
 
-                                            {editingPreset?.ttsConfig?.provider === 'gemini' && (
+                                            {(!editingPreset?.ttsConfig?.provider || editingPreset?.ttsConfig?.provider === 'gemini') && (
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>
                                                         <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Voice</label>
                                                         <select
-                                                            value={editingPreset?.ttsConfig?.voiceName || 'Puck'}
+                                                            value={editingPreset?.ttsConfig?.voiceName || 'Zephyr'}
                                                             onChange={e => setEditingPreset(prev => ({ 
                                                                 ...prev, 
                                                                 ttsConfig: { 
@@ -651,7 +651,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                                                                 ttsConfig: { 
                                                                     ...prev?.ttsConfig,
                                                                     enabled: prev?.ttsConfig?.enabled ?? true,
-                                                                    voiceName: prev?.ttsConfig?.voiceName || 'Puck',
+                                                                    voiceName: prev?.ttsConfig?.voiceName || 'Zephyr',
                                                                     autoPlay: e.target.checked
                                                                 } 
                                                             }))}
