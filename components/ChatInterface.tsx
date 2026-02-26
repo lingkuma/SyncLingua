@@ -464,6 +464,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       updateSession(sessionWithTrigger);
 
       let currentBotText = '';
+      let chunkBuffer = ''; // 缓冲区，用于累积流式数据
 
       try {
         // 2. Call API
@@ -477,20 +478,51 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             "Perform your task based on the latest main conversation context.", // Generic instruction
             settings.temperature,
             (chunk) => {
-                currentBotText += chunk;
-                // Live update
-                const streamingTab = {
-                    ...currentTab,
-                    messages: [...currentTab.messages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }]
-                };
+                chunkBuffer += chunk; // 累积数据到缓冲区
                 
-                const currentSession = sessionRef.current;
-                updateSession({
-                    ...currentSession,
-                    auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? streamingTab : t)
-                });
+                // 检查缓冲区中是否包含换行符
+                if (chunkBuffer.includes('\n')) {
+                    // 找到换行符的位置
+                    const newlineIndex = chunkBuffer.indexOf('\n');
+                    
+                    // 提取换行符之前的内容（包括换行符）
+                    const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                    
+                    // 更新当前文本
+                    currentBotText += contentToUpdate;
+                    
+                    // Live update
+                    const streamingTab = {
+                        ...currentTab,
+                        messages: [...currentTab.messages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }]
+                    };
+                    
+                    const currentSession = sessionRef.current;
+                    updateSession({
+                        ...currentSession,
+                        auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? streamingTab : t)
+                    });
+                    
+                    // 保留换行符之后的内容在缓冲区中
+                    chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                }
             }
         );
+        
+        // 流式传输结束后，将缓冲区中剩余的内容也添加进去
+        if (chunkBuffer.length > 0) {
+            currentBotText += chunkBuffer;
+            const streamingTab = {
+                ...currentTab,
+                messages: [...currentTab.messages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }]
+            };
+            
+            const currentSession = sessionRef.current;
+            updateSession({
+                ...currentSession,
+                auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? streamingTab : t)
+            });
+        }
       } catch (e) {
           console.error("Auto Trigger Error", e);
            const errorTab = {
@@ -554,6 +586,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       
       let currentBotText = '';
       let finalFullText = '';
+      let chunkBuffer = ''; // 缓冲区，用于累积流式数据
       
       try {
           const fullResponse = await streamChat(
@@ -564,16 +597,46 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
               newUserMsg.text,
               settings.temperature,
               (chunk) => {
-                  currentBotText += chunk;
-                  updateSession({
-                      ...sessionRef.current,
-                      mainMessages: [
-                          ...updatedMessages,
-                          { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
-                      ]
-                  });
+                  chunkBuffer += chunk; // 累积数据到缓冲区
+                  
+                  // 检查缓冲区中是否包含换行符
+                  if (chunkBuffer.includes('\n')) {
+                      // 找到换行符的位置
+                      const newlineIndex = chunkBuffer.indexOf('\n');
+                      
+                      // 提取换行符之前的内容（包括换行符）
+                      const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                      
+                      // 更新当前文本
+                      currentBotText += contentToUpdate;
+                      
+                      // 更新状态
+                      updateSession({
+                          ...sessionRef.current,
+                          mainMessages: [
+                              ...updatedMessages,
+                              { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                          ]
+                      });
+                      
+                      // 保留换行符之后的内容在缓冲区中
+                      chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                  }
               }
           );
+          
+          // 流式传输结束后，将缓冲区中剩余的内容也添加进去
+          if (chunkBuffer.length > 0) {
+              currentBotText += chunkBuffer;
+              updateSession({
+                  ...sessionRef.current,
+                  mainMessages: [
+                      ...updatedMessages,
+                      { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                  ]
+              });
+          }
+          
           finalFullText = fullResponse;
 
           // Auto-play TTS if enabled in preset
@@ -750,6 +813,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
     const botMsgId = (Date.now() + 1).toString();
     let currentBotText = '';
+    let chunkBuffer = ''; // 缓冲区，用于累积流式数据
 
     try {
         await generateAuxiliaryResponse(
@@ -762,18 +826,48 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
             newUserMsg.text, 
             settings.temperature,
             (chunk) => {
-                currentBotText += chunk;
-                const streamingTabs = session.auxTabs.map(t => 
-                    t.id === session.activeAuxTabId 
-                    ? { 
-                        ...t, 
-                        messages: [...updatedTabMessages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }] 
-                      } 
-                    : t
-                );
-                updateSession({ ...session, auxTabs: streamingTabs });
+                chunkBuffer += chunk; // 累积数据到缓冲区
+                
+                // 检查缓冲区中是否包含换行符
+                if (chunkBuffer.includes('\n')) {
+                    // 找到换行符的位置
+                    const newlineIndex = chunkBuffer.indexOf('\n');
+                    
+                    // 提取换行符之前的内容（包括换行符）
+                    const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                    
+                    // 更新当前文本
+                    currentBotText += contentToUpdate;
+                    
+                    const streamingTabs = session.auxTabs.map(t => 
+                        t.id === session.activeAuxTabId 
+                        ? { 
+                            ...t, 
+                            messages: [...updatedTabMessages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }] 
+                          } 
+                        : t
+                    );
+                    updateSession({ ...session, auxTabs: streamingTabs });
+                    
+                    // 保留换行符之后的内容在缓冲区中
+                    chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                }
             }
         );
+        
+        // 流式传输结束后，将缓冲区中剩余的内容也添加进去
+        if (chunkBuffer.length > 0) {
+            currentBotText += chunkBuffer;
+            const streamingTabs = session.auxTabs.map(t => 
+                t.id === session.activeAuxTabId 
+                ? { 
+                    ...t, 
+                    messages: [...updatedTabMessages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }] 
+                  } 
+                : t
+            );
+            updateSession({ ...session, auxTabs: streamingTabs });
+        }
     } catch (e) {
          const errorTabs = session.auxTabs.map(t => 
             t.id === session.activeAuxTabId 
