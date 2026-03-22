@@ -255,7 +255,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div>
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Server URL</label>
                     <input 
-                        type="text"
+                        type="url"
+                        name="url"
+                        autoComplete="url"
                         value={settings.webdav?.url || ''}
                         onChange={(e) => updateWebDav({ url: e.target.value })}
                         placeholder="https://dav.example.com/remote.php/dav/files/user/"
@@ -267,6 +269,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
                         <input 
                             type="text"
+                            name="username"
+                            autoComplete="username"
                             value={settings.webdav?.username || ''}
                             onChange={(e) => updateWebDav({ username: e.target.value })}
                             className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none text-sm"
@@ -277,6 +281,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                          <div className="relative">
                             <input 
                                 type={showDavPass ? "text" : "password"}
+                                name="password"
+                                autoComplete="current-password"
                                 value={settings.webdav?.password || ''}
                                 onChange={(e) => updateWebDav({ password: e.target.value })}
                                 className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 pr-8 focus:ring-2 focus:ring-sky-500 focus:border-transparent outline-none text-sm"
