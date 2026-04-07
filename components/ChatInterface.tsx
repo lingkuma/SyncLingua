@@ -1293,8 +1293,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                                 <span className="hidden sm:inline">Updating Scene...</span>
                             </div>
                         )}
-                        {!settings.apiKey && (
+                        {((settings.apiProvider === 'gemini' || !settings.apiProvider) && !settings.apiKey) && (
                             <div className="flex items-center gap-1 text-amber-500 text-xs font-bold animate-pulse" title="API Key missing in Settings">
+                                <TriangleAlert size={14} />
+                                <span className="hidden sm:inline">No API Key</span>
+                            </div>
+                        )}
+                        {settings.apiProvider === 'openai' && !settings.openaiConfig?.apiKey && (
+                            <div className="flex items-center gap-1 text-amber-500 text-xs font-bold animate-pulse" title="OpenAI API Key missing in Settings">
                                 <TriangleAlert size={14} />
                                 <span className="hidden sm:inline">No API Key</span>
                             </div>
