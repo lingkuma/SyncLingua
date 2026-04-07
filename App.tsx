@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen, Maximize, Minimize, CloudUpload, CloudDownload } from 'lucide-react';
-import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, ImageTemplate, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS } from './types';
+import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, ImageTemplate, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
 import { ChatInterface } from './components/ChatInterface';
@@ -149,7 +149,11 @@ const App: React.FC = () => {
               ...saved,
               apiKey: saved.apiKey || envKey,
               imageModel: saved.imageModel || DEFAULT_IMAGE_MODELS[0].id,
-              theme: saved.theme || 'auto' 
+              theme: saved.theme || 'auto',
+              // 添加新配置项的默认值
+              apiProvider: saved.apiProvider || 'gemini',
+              openaiConfig: saved.openaiConfig || { ...OPENAI_DEFAULT_CONFIG },
+              openaiGeminiTTSConfig: saved.openaiGeminiTTSConfig || { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG }
           };
       }
       return { 
@@ -157,7 +161,10 @@ const App: React.FC = () => {
           imageModel: DEFAULT_IMAGE_MODELS[0].id,
           temperature: 0.7, 
           apiKey: envKey,
-          theme: 'auto'
+          theme: 'auto',
+          apiProvider: 'gemini',
+          openaiConfig: { ...OPENAI_DEFAULT_CONFIG },
+          openaiGeminiTTSConfig: { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG }
       };
   });
 

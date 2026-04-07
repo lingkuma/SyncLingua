@@ -2,8 +2,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare, Menu, PanelLeftOpen, Mic } from 'lucide-react';
-import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS } from '../types';
-import { streamChat, generateAuxiliaryResponse, generateSpeech, generateSceneImage, transcribeUserAudio } from '../services/geminiService';
+import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG } from '../types';
+import { streamChat as geminiStreamChat, generateAuxiliaryResponse as geminiGenerateAuxiliaryResponse, generateSpeech as geminiGenerateSpeech, generateSceneImage, transcribeUserAudio } from '../services/geminiService';
+import { streamChat as openaiStreamChat, generateAuxiliaryResponse as openaiGenerateAuxiliaryResponse, generateSpeech as openaiGeminiGenerateSpeech } from '../services/openaiService';
 import { generateSpeechStream } from '../services/minimaxService';
 import { saveImageToCache } from '../services/imageDb';
 
@@ -339,10 +340,33 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
                   );
                   return;
               } else {
-                  // Gemini TTS (existing logic)
+                  // Gemini TTS - 根据提供商选择不同的实现
                   const voice = voiceName || mainPreset?.ttsConfig?.voiceName || 'Zephyr';
-                  buffer = await generateSpeech(settings.apiKey, text, voice, audioContextRef.current);
-                  audioCache.current.set(msgId, buffer);
+                  const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
+                  
+                  if (isGemini) {
+                      // 原生 Gemini TTS
+                      buffer = await geminiGenerateSpeech(settings.apiKey, text, voice, audioContextRef.current);
+                      audioCache.current.set(msgId, buffer);
+                  } else {
+                      // OpenAI 格式的 Gemini TTS（中转服务）
+                      const ttsConfig = settings.openaiGeminiTTSConfig;
+                      if (!ttsConfig?.apiKey || !ttsConfig?.baseUrl) {
+                          alert("Please configure Gemini TTS (OpenAI Format) in Settings first.");
+                          setLoadingTTSId(null);
+                          return;
+                      }
+                      
+                      const fullTTSConfig = {
+                          apiKey: ttsConfig.apiKey,
+                          baseUrl: ttsConfig.baseUrl,
+                          model: ttsConfig.model || OPENAI_GEMINI_TTS_DEFAULT_CONFIG.model,
+                          voiceName: voice
+                      };
+                      
+                      buffer = await openaiGeminiGenerateSpeech(fullTTSConfig, text, audioContextRef.current);
+                      audioCache.current.set(msgId, buffer);
+                  }
               }
           }
 
@@ -370,6 +394,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
   const handleSceneImageGeneration = async (latestMessages: Message[]) => {
       if (!mainPreset?.backgroundImageConfig?.enabled) return;
+      
+      // 图片生成目前只支持 Gemini
+      const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
+      if (!isGemini) {
+          console.log("Image generation only supports Gemini provider");
+          return;
+      }
       if (!settings.apiKey) return;
 
       setIsGeneratingImage(true);
@@ -467,47 +498,91 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       let chunkBuffer = ''; // 缓冲区，用于累积流式数据
 
       try {
-        // 2. Call API
-        await generateAuxiliaryResponse(
-            settings.apiKey,
-            settings.model,
-            preset.systemPrompt,
-            mainPreset?.sharedPrompt || '', // Pass shared context
-            mainHistory,
-            [], // Empty aux history for auto-mode
-            "Perform your task based on the latest main conversation context.", // Generic instruction
-            settings.temperature,
-            (chunk) => {
-                chunkBuffer += chunk; // 累积数据到缓冲区
-                
-                // 检查缓冲区中是否包含换行符
-                if (chunkBuffer.includes('\n')) {
-                    // 找到换行符的位置
-                    const newlineIndex = chunkBuffer.indexOf('\n');
+        // 根据提供商选择不同的 API 调用
+        const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
+        
+        if (isGemini) {
+            // Gemini API 调用
+            await geminiGenerateAuxiliaryResponse(
+                settings.apiKey,
+                settings.model,
+                preset.systemPrompt,
+                mainPreset?.sharedPrompt || '', // Pass shared context
+                mainHistory,
+                [], // Empty aux history for auto-mode
+                "Perform your task based on the latest main conversation context.", // Generic instruction
+                settings.temperature,
+                (chunk) => {
+                    chunkBuffer += chunk; // 累积数据到缓冲区
                     
-                    // 提取换行符之前的内容（包括换行符）
-                    const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
-                    
-                    // 更新当前文本
-                    currentBotText += contentToUpdate;
-                    
-                    // Live update
-                    const streamingTab = {
-                        ...currentTab,
-                        messages: [...currentTab.messages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }]
-                    };
-                    
-                    const currentSession = sessionRef.current;
-                    updateSession({
-                        ...currentSession,
-                        auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? streamingTab : t)
-                    });
-                    
-                    // 保留换行符之后的内容在缓冲区中
-                    chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    // 检查缓冲区中是否包含换行符
+                    if (chunkBuffer.includes('\n')) {
+                        // 找到换行符的位置
+                        const newlineIndex = chunkBuffer.indexOf('\n');
+                        
+                        // 提取换行符之前的内容（包括换行符）
+                        const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                        
+                        // 更新当前文本
+                        currentBotText += contentToUpdate;
+                        
+                        // Live update
+                        const streamingTab = {
+                            ...currentTab,
+                            messages: [...currentTab.messages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }]
+                        };
+                        
+                        const currentSession = sessionRef.current;
+                        updateSession({
+                            ...currentSession,
+                            auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? streamingTab : t)
+                        });
+                        
+                        // 保留换行符之后的内容在缓冲区中
+                        chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    }
                 }
-            }
-        );
+            );
+        } else {
+            // OpenAI API 调用
+            const openaiConfig = {
+                apiKey: settings.openaiConfig?.apiKey || '',
+                baseUrl: settings.openaiConfig?.baseUrl || OPENAI_DEFAULT_CONFIG.baseUrl,
+                model: settings.openaiConfig?.model || OPENAI_DEFAULT_CONFIG.model
+            };
+            
+            await openaiGenerateAuxiliaryResponse(
+                openaiConfig,
+                preset.systemPrompt,
+                mainPreset?.sharedPrompt || '',
+                mainHistory,
+                [],
+                "Perform your task based on the latest main conversation context.",
+                settings.temperature,
+                (chunk) => {
+                    chunkBuffer += chunk;
+                    
+                    if (chunkBuffer.includes('\n')) {
+                        const newlineIndex = chunkBuffer.indexOf('\n');
+                        const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                        currentBotText += contentToUpdate;
+                        
+                        const streamingTab = {
+                            ...currentTab,
+                            messages: [...currentTab.messages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }]
+                        };
+                        
+                        const currentSession = sessionRef.current;
+                        updateSession({
+                            ...currentSession,
+                            auxTabs: currentSession.auxTabs.map(t => t.id === tab.id ? streamingTab : t)
+                        });
+                        
+                        chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    }
+                }
+            );
+        }
         
         // 流式传输结束后，将缓冲区中剩余的内容也添加进去
         if (chunkBuffer.length > 0) {
@@ -545,8 +620,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
   const handleSendToMain = async (text: string) => {
       if (!text.trim() || isGeneratingMain) return;
-      if (!settings.apiKey) {
+      
+      // 根据提供商检查 API Key
+      const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
+      if (isGemini && !settings.apiKey) {
           alert("Please set your Google Gemini API Key in Settings first.");
+          return;
+      }
+      if (!isGemini && !settings.openaiConfig?.apiKey) {
+          alert("Please set your OpenAI API Key in Settings first.");
           return;
       }
       
@@ -589,60 +671,120 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       let chunkBuffer = ''; // 缓冲区，用于累积流式数据
       
       try {
-          const fullResponse = await streamChat(
-              settings.apiKey,
-              settings.model,
-              fullSystemInstruction,
-              updatedMessages, 
-              newUserMsg.text,
-              settings.temperature,
-              (chunk) => {
-                  chunkBuffer += chunk; // 累积数据到缓冲区
-                  
-                  // 检查缓冲区中是否包含换行符
-                  if (chunkBuffer.includes('\n')) {
-                      // 找到换行符的位置
-                      const newlineIndex = chunkBuffer.indexOf('\n');
+          // 根据提供商选择不同的 API 调用
+          if (isGemini) {
+              // Gemini API 调用
+              const fullResponse = await geminiStreamChat(
+                  settings.apiKey,
+                  settings.model,
+                  fullSystemInstruction,
+                  updatedMessages, 
+                  newUserMsg.text,
+                  settings.temperature,
+                  (chunk) => {
+                      chunkBuffer += chunk; // 累积数据到缓冲区
                       
-                      // 提取换行符之前的内容（包括换行符）
-                      const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
-                      
-                      // 更新当前文本
-                      currentBotText += contentToUpdate;
-                      
-                      // 更新状态
-                      updateSession({
-                          ...sessionRef.current,
-                          mainMessages: [
-                              ...updatedMessages,
-                              { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
-                          ]
-                      });
-                      
-                      // 保留换行符之后的内容在缓冲区中
-                      chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                      // 检查缓冲区中是否包含换行符
+                      if (chunkBuffer.includes('\n')) {
+                          // 找到换行符的位置
+                          const newlineIndex = chunkBuffer.indexOf('\n');
+                          
+                          // 提取换行符之前的内容（包括换行符）
+                          const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                          
+                          // 更新当前文本
+                          currentBotText += contentToUpdate;
+                          
+                          // 更新状态
+                          updateSession({
+                              ...sessionRef.current,
+                              mainMessages: [
+                                  ...updatedMessages,
+                                  { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                              ]
+                          });
+                          
+                          // 保留换行符之后的内容在缓冲区中
+                          chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                      }
                   }
+              );
+              
+              // 流式传输结束后，将缓冲区中剩余的内容也添加进去
+              if (chunkBuffer.length > 0) {
+                  currentBotText += chunkBuffer;
+                  updateSession({
+                      ...sessionRef.current,
+                      mainMessages: [
+                          ...updatedMessages,
+                          { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                      ]
+                  });
               }
-          );
-          
-          // 流式传输结束后，将缓冲区中剩余的内容也添加进去
-          if (chunkBuffer.length > 0) {
-              currentBotText += chunkBuffer;
-              updateSession({
-                  ...sessionRef.current,
-                  mainMessages: [
-                      ...updatedMessages,
-                      { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
-                  ]
-              });
+              
+              finalFullText = fullResponse;
+          } else {
+              // OpenAI API 调用
+              const openaiConfig = {
+                  apiKey: settings.openaiConfig?.apiKey || '',
+                  baseUrl: settings.openaiConfig?.baseUrl || OPENAI_DEFAULT_CONFIG.baseUrl,
+                  model: settings.openaiConfig?.model || OPENAI_DEFAULT_CONFIG.model
+              };
+              
+              const fullResponse = await openaiStreamChat(
+                  openaiConfig,
+                  fullSystemInstruction,
+                  updatedMessages, 
+                  newUserMsg.text,
+                  settings.temperature,
+                  (chunk) => {
+                      chunkBuffer += chunk; // 累积数据到缓冲区
+                      
+                      // 检查缓冲区中是否包含换行符
+                      if (chunkBuffer.includes('\n')) {
+                          // 找到换行符的位置
+                          const newlineIndex = chunkBuffer.indexOf('\n');
+                          
+                          // 提取换行符之前的内容（包括换行符）
+                          const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                          
+                          // 更新当前文本
+                          currentBotText += contentToUpdate;
+                          
+                          // 更新状态
+                          updateSession({
+                              ...sessionRef.current,
+                              mainMessages: [
+                                  ...updatedMessages,
+                                  { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                              ]
+                          });
+                          
+                          // 保留换行符之后的内容在缓冲区中
+                          chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                      }
+                  }
+              );
+              
+              // 流式传输结束后，将缓冲区中剩余的内容也添加进去
+              if (chunkBuffer.length > 0) {
+                  currentBotText += chunkBuffer;
+                  updateSession({
+                      ...sessionRef.current,
+                      mainMessages: [
+                          ...updatedMessages,
+                          { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                      ]
+                  });
+              }
+              
+              finalFullText = fullResponse;
           }
-          
-          finalFullText = fullResponse;
 
           // Auto-play TTS if enabled in preset
-          if (mainPreset?.ttsConfig?.autoPlay && fullResponse) {
+          if (mainPreset?.ttsConfig?.autoPlay && finalFullText) {
                setTimeout(() => {
-                   handleTTS(fullResponse, botMsgId, mainPreset.ttsConfig?.voiceName);
+                   handleTTS(finalFullText, botMsgId, mainPreset.ttsConfig?.voiceName);
                }, 100);
           }
 
@@ -678,8 +820,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   // Main Chat Handlers
   const sendMainMessage = async () => {
     if (!inputMain.trim() || isGeneratingMain) return;
-    if (!settings.apiKey) {
+    
+    // 根据提供商检查 API Key
+    const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
+    if (isGemini && !settings.apiKey) {
         alert("Please set your Google Gemini API Key in Settings first.");
+        return;
+    }
+    if (!isGemini && !settings.openaiConfig?.apiKey) {
+        alert("Please set your OpenAI API Key in Settings first.");
         return;
     }
     
@@ -723,60 +872,120 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
     let chunkBuffer = ''; // 缓冲区，用于累积流式数据
     
     try {
-        const fullResponse = await streamChat(
-            settings.apiKey,
-            settings.model,
-            fullSystemInstruction,
-            updatedMessages, 
-            newUserMsg.text,
-            settings.temperature,
-            (chunk) => {
-                chunkBuffer += chunk; // 累积数据到缓冲区
-                
-                // 检查缓冲区中是否包含换行符
-                if (chunkBuffer.includes('\n')) {
-                    // 找到换行符的位置
-                    const newlineIndex = chunkBuffer.indexOf('\n');
+        // 根据提供商选择不同的 API 调用
+        if (isGemini) {
+            // Gemini API 调用
+            const fullResponse = await geminiStreamChat(
+                settings.apiKey,
+                settings.model,
+                fullSystemInstruction,
+                updatedMessages, 
+                newUserMsg.text,
+                settings.temperature,
+                (chunk) => {
+                    chunkBuffer += chunk; // 累积数据到缓冲区
                     
-                    // 提取换行符之前的内容（包括换行符）
-                    const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
-                    
-                    // 更新当前文本
-                    currentBotText += contentToUpdate;
-                    
-                    // 更新状态
-                    updateSession({
-                        ...sessionRef.current,
-                        mainMessages: [
-                            ...updatedMessages,
-                            { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
-                        ]
-                    });
-                    
-                    // 保留换行符之后的内容在缓冲区中
-                    chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    // 检查缓冲区中是否包含换行符
+                    if (chunkBuffer.includes('\n')) {
+                        // 找到换行符的位置
+                        const newlineIndex = chunkBuffer.indexOf('\n');
+                        
+                        // 提取换行符之前的内容（包括换行符）
+                        const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                        
+                        // 更新当前文本
+                        currentBotText += contentToUpdate;
+                        
+                        // 更新状态
+                        updateSession({
+                            ...sessionRef.current,
+                            mainMessages: [
+                                ...updatedMessages,
+                                { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                            ]
+                        });
+                        
+                        // 保留换行符之后的内容在缓冲区中
+                        chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    }
                 }
+            );
+            
+            // 流式传输结束后，将缓冲区中剩余的内容也添加进去
+            if (chunkBuffer.length > 0) {
+                currentBotText += chunkBuffer;
+                updateSession({
+                    ...sessionRef.current,
+                    mainMessages: [
+                        ...updatedMessages,
+                        { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                    ]
+                });
             }
-        );
-        
-        // 流式传输结束后，将缓冲区中剩余的内容也添加进去
-        if (chunkBuffer.length > 0) {
-            currentBotText += chunkBuffer;
-            updateSession({
-                ...sessionRef.current,
-                mainMessages: [
-                    ...updatedMessages,
-                    { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
-                ]
-            });
+            
+            finalFullText = fullResponse;
+        } else {
+            // OpenAI API 调用
+            const openaiConfig = {
+                apiKey: settings.openaiConfig?.apiKey || '',
+                baseUrl: settings.openaiConfig?.baseUrl || OPENAI_DEFAULT_CONFIG.baseUrl,
+                model: settings.openaiConfig?.model || OPENAI_DEFAULT_CONFIG.model
+            };
+            
+            const fullResponse = await openaiStreamChat(
+                openaiConfig,
+                fullSystemInstruction,
+                updatedMessages, 
+                newUserMsg.text,
+                settings.temperature,
+                (chunk) => {
+                    chunkBuffer += chunk; // 累积数据到缓冲区
+                    
+                    // 检查缓冲区中是否包含换行符
+                    if (chunkBuffer.includes('\n')) {
+                        // 找到换行符的位置
+                        const newlineIndex = chunkBuffer.indexOf('\n');
+                        
+                        // 提取换行符之前的内容（包括换行符）
+                        const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                        
+                        // 更新当前文本
+                        currentBotText += contentToUpdate;
+                        
+                        // 更新状态
+                        updateSession({
+                            ...sessionRef.current,
+                            mainMessages: [
+                                ...updatedMessages,
+                                { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                            ]
+                        });
+                        
+                        // 保留换行符之后的内容在缓冲区中
+                        chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    }
+                }
+            );
+            
+            // 流式传输结束后，将缓冲区中剩余的内容也添加进去
+            if (chunkBuffer.length > 0) {
+                currentBotText += chunkBuffer;
+                updateSession({
+                    ...sessionRef.current,
+                    mainMessages: [
+                        ...updatedMessages,
+                        { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }
+                    ]
+                });
+            }
+            
+            finalFullText = fullResponse;
         }
-        
-        finalFullText = fullResponse;
 
         // Auto-play TTS if enabled in preset
-        if (mainPreset?.ttsConfig?.autoPlay && fullResponse) {
+        if (mainPreset?.ttsConfig?.autoPlay && finalFullText) {
              setTimeout(() => {
-                 handleTTS(fullResponse, botMsgId, mainPreset.ttsConfig?.voiceName);
+                 handleTTS(finalFullText, botMsgId, mainPreset.ttsConfig?.voiceName);
              }, 100);
         }
 
@@ -817,8 +1026,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
 
   const sendAuxMessage = async () => {
     if (!inputAux.trim() || isGeneratingAux || !activeAuxTab || !activeAuxPreset) return;
-    if (!settings.apiKey) {
+    
+    // 根据提供商检查 API Key
+    const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
+    if (isGemini && !settings.apiKey) {
         alert("Please set your Google Gemini API Key in Settings first.");
+        return;
+    }
+    if (!isGemini && !settings.openaiConfig?.apiKey) {
+        alert("Please set your OpenAI API Key in Settings first.");
         return;
     }
 
@@ -847,44 +1063,93 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
     let chunkBuffer = ''; // 缓冲区，用于累积流式数据
 
     try {
-        await generateAuxiliaryResponse(
-            settings.apiKey,
-            settings.model,
-            activeAuxPreset.systemPrompt,
-            mainPreset?.sharedPrompt || '', // Pass Shared Context
-            session.mainMessages, 
-            updatedTabMessages, 
-            newUserMsg.text, 
-            settings.temperature,
-            (chunk) => {
-                chunkBuffer += chunk; // 累积数据到缓冲区
-                
-                // 检查缓冲区中是否包含换行符
-                if (chunkBuffer.includes('\n')) {
-                    // 找到换行符的位置
-                    const newlineIndex = chunkBuffer.indexOf('\n');
+        // 根据提供商选择不同的 API 调用
+        if (isGemini) {
+            // Gemini API 调用
+            await geminiGenerateAuxiliaryResponse(
+                settings.apiKey,
+                settings.model,
+                activeAuxPreset.systemPrompt,
+                mainPreset?.sharedPrompt || '', // Pass Shared Context
+                session.mainMessages, 
+                updatedTabMessages, 
+                newUserMsg.text, 
+                settings.temperature,
+                (chunk) => {
+                    chunkBuffer += chunk; // 累积数据到缓冲区
                     
-                    // 提取换行符之前的内容（包括换行符）
-                    const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
-                    
-                    // 更新当前文本
-                    currentBotText += contentToUpdate;
-                    
-                    const streamingTabs = session.auxTabs.map(t => 
-                        t.id === session.activeAuxTabId 
-                        ? { 
-                            ...t, 
-                            messages: [...updatedTabMessages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }] 
-                          } 
-                        : t
-                    );
-                    updateSession({ ...session, auxTabs: streamingTabs });
-                    
-                    // 保留换行符之后的内容在缓冲区中
-                    chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    // 检查缓冲区中是否包含换行符
+                    if (chunkBuffer.includes('\n')) {
+                        // 找到换行符的位置
+                        const newlineIndex = chunkBuffer.indexOf('\n');
+                        
+                        // 提取换行符之前的内容（包括换行符）
+                        const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                        
+                        // 更新当前文本
+                        currentBotText += contentToUpdate;
+                        
+                        const streamingTabs = session.auxTabs.map(t => 
+                            t.id === session.activeAuxTabId 
+                            ? { 
+                                ...t, 
+                                messages: [...updatedTabMessages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }] 
+                              } 
+                            : t
+                        );
+                        updateSession({ ...session, auxTabs: streamingTabs });
+                        
+                        // 保留换行符之后的内容在缓冲区中
+                        chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    }
                 }
-            }
-        );
+            );
+        } else {
+            // OpenAI API 调用
+            const openaiConfig = {
+                apiKey: settings.openaiConfig?.apiKey || '',
+                baseUrl: settings.openaiConfig?.baseUrl || OPENAI_DEFAULT_CONFIG.baseUrl,
+                model: settings.openaiConfig?.model || OPENAI_DEFAULT_CONFIG.model
+            };
+            
+            await openaiGenerateAuxiliaryResponse(
+                openaiConfig,
+                activeAuxPreset.systemPrompt,
+                mainPreset?.sharedPrompt || '',
+                session.mainMessages, 
+                updatedTabMessages, 
+                newUserMsg.text, 
+                settings.temperature,
+                (chunk) => {
+                    chunkBuffer += chunk; // 累积数据到缓冲区
+                    
+                    // 检查缓冲区中是否包含换行符
+                    if (chunkBuffer.includes('\n')) {
+                        // 找到换行符的位置
+                        const newlineIndex = chunkBuffer.indexOf('\n');
+                        
+                        // 提取换行符之前的内容（包括换行符）
+                        const contentToUpdate = chunkBuffer.slice(0, newlineIndex + 1);
+                        
+                        // 更新当前文本
+                        currentBotText += contentToUpdate;
+                        
+                        const streamingTabs = session.auxTabs.map(t => 
+                            t.id === session.activeAuxTabId 
+                            ? { 
+                                ...t, 
+                                messages: [...updatedTabMessages, { id: botMsgId, role: 'model' as const, text: currentBotText, timestamp: Date.now() }] 
+                              } 
+                            : t
+                        );
+                        updateSession({ ...session, auxTabs: streamingTabs });
+                        
+                        // 保留换行符之后的内容在缓冲区中
+                        chunkBuffer = chunkBuffer.slice(newlineIndex + 1);
+                    }
+                }
+            );
+        }
         
         // 流式传输结束后，将缓冲区中剩余的内容也添加进去
         if (chunkBuffer.length > 0) {

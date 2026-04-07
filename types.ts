@@ -87,6 +87,24 @@ export interface WebDavConfig {
   password: string;
 }
 
+// API 提供商类型
+export type ApiProvider = 'gemini' | 'openai';
+
+// OpenAI 配置接口
+export interface OpenAIConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
+// OpenAI 格式的 Gemini TTS 配置（用于中转服务）
+export interface OpenAIGeminiTTSConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  voiceName: string;
+}
+
 export interface AppSettings {
   model: string;
   imageModel: string; // New: Model for generating images
@@ -95,6 +113,9 @@ export interface AppSettings {
   theme: 'auto' | 'light' | 'dark';
   webdav?: WebDavConfig;
   minimaxDefaultConfig?: MinimaxConfig;
+  apiProvider: ApiProvider; // API 提供商选择：gemini 或 openai
+  openaiConfig?: OpenAIConfig; // OpenAI 配置
+  openaiGeminiTTSConfig?: OpenAIGeminiTTSConfig; // OpenAI 格式的 Gemini TTS 配置
 }
 
 export const DEFAULT_MODELS = [
@@ -182,3 +203,18 @@ export const MINIMAX_EMOTIONS = [
   { id: 'disgusted', name: 'Disgusted' },
   { id: 'surprised', name: 'Surprised' }
 ];
+
+// OpenAI 默认配置
+export const OPENAI_DEFAULT_CONFIG: OpenAIConfig = {
+  apiKey: '',
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'gpt-4o'
+};
+
+// OpenAI 格式的 Gemini TTS 默认配置
+export const OPENAI_GEMINI_TTS_DEFAULT_CONFIG: OpenAIGeminiTTSConfig = {
+  apiKey: '',
+  baseUrl: '',
+  model: 'gemini-2.5-flash-preview-tts',
+  voiceName: 'Zephyr'
+};
