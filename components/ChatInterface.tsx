@@ -2,9 +2,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare, Menu, PanelLeftOpen, Mic } from 'lucide-react';
-import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG } from '../types';
-import { streamChat as geminiStreamChat, generateAuxiliaryResponse as geminiGenerateAuxiliaryResponse, generateSpeech as geminiGenerateSpeech, generateSceneImage, transcribeUserAudio } from '../services/geminiService';
-import { streamChat as openaiStreamChat, generateAuxiliaryResponse as openaiGenerateAuxiliaryResponse, generateSpeech as openaiGeminiGenerateSpeech } from '../services/openaiService';
+import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, OPENAI_IMAGE_DEFAULT_CONFIG } from '../types';
+import { streamChat as geminiStreamChat, generateAuxiliaryResponse as geminiGenerateAuxiliaryResponse, generateSpeech as geminiGenerateSpeech, generateSceneImage as geminiGenerateSceneImage, transcribeUserAudio } from '../services/geminiService';
+import { streamChat as openaiStreamChat, generateAuxiliaryResponse as openaiGenerateAuxiliaryResponse, generateSpeech as openaiGeminiGenerateSpeech, generateImage as openaiGenerateImage } from '../services/openaiService';
 import { generateSpeechStream } from '../services/minimaxService';
 import { saveImageToCache } from '../services/imageDb';
 
@@ -395,13 +395,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   const handleSceneImageGeneration = async (latestMessages: Message[]) => {
       if (!mainPreset?.backgroundImageConfig?.enabled) return;
       
-      // 图片生成目前只支持 Gemini
       const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
-      if (!isGemini) {
-          console.log("Image generation only supports Gemini provider");
-          return;
-      }
-      if (!settings.apiKey) return;
+      
+      // 检查 API Key
+      if (isGemini && !settings.apiKey) return;
+      if (!isGemini && !settings.openaiImageConfig?.apiKey) return;
 
       setIsGeneratingImage(true);
 
@@ -438,12 +436,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
       No text overlays. Focus on atmosphere and setting.
       `;
 
-      // Detect device type and set appropriate aspect ratio
+      // Detect device type and set appropriate aspect ratio/size
       const isMobile = window.innerWidth < 768;
       const aspectRatio = isMobile ? "9:16" : "16:9";
+      const imageSize = isMobile ? "1024x1792" : "1792x1024";
 
       try {
-          const imageUrl = await generateSceneImage(settings.apiKey, settings.imageModel || 'gemini-2.5-flash-image', fullPrompt, aspectRatio);
+          let imageUrl: string;
+          
+          if (isGemini) {
+              // Gemini 原生图片生成
+              imageUrl = await geminiGenerateSceneImage(settings.apiKey, settings.imageModel || 'gemini-2.5-flash-image', fullPrompt, aspectRatio);
+          } else {
+              // OpenAI 格式图片生成
+              const imageConfig = {
+                  apiKey: settings.openaiImageConfig?.apiKey || '',
+                  baseUrl: settings.openaiImageConfig?.baseUrl || OPENAI_IMAGE_DEFAULT_CONFIG.baseUrl,
+                  model: settings.openaiImageConfig?.model || OPENAI_IMAGE_DEFAULT_CONFIG.model
+              };
+              imageUrl = await openaiGenerateImage(imageConfig, fullPrompt, imageSize);
+          }
           
           // Save to Local DB (IndexedDB)
           await saveImageToCache(session.id, imageUrl);

@@ -105,6 +105,13 @@ export interface OpenAIGeminiTTSConfig {
   voiceName: string;
 }
 
+// OpenAI 格式的图片生成配置
+export interface OpenAIImageConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 export interface AppSettings {
   model: string;
   imageModel: string; // New: Model for generating images
@@ -116,6 +123,7 @@ export interface AppSettings {
   apiProvider: ApiProvider; // API 提供商选择：gemini 或 openai
   openaiConfig?: OpenAIConfig; // OpenAI 配置
   openaiGeminiTTSConfig?: OpenAIGeminiTTSConfig; // OpenAI 格式的 Gemini TTS 配置
+  openaiImageConfig?: OpenAIImageConfig; // OpenAI 格式的图片生成配置
 }
 
 export const DEFAULT_MODELS = [
@@ -217,4 +225,11 @@ export const OPENAI_GEMINI_TTS_DEFAULT_CONFIG: OpenAIGeminiTTSConfig = {
   baseUrl: '',
   model: 'gemini-2.5-flash-preview-tts',
   voiceName: 'Zephyr'
+};
+
+// OpenAI 格式的图片生成默认配置
+export const OPENAI_IMAGE_DEFAULT_CONFIG: OpenAIImageConfig = {
+  apiKey: '',
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'dall-e-3'
 };

@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { X, Settings as SettingsIcon, Download, Upload, Key, Eye, EyeOff, Sun, Moon, Monitor, Cloud, CloudUpload, CloudDownload, RefreshCw, Image as ImageIcon, Volume2, Zap } from 'lucide-react';
-import { AppSettings, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, WebDavConfig, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, GEMINI_TTS_VOICES, ApiProvider, OpenAIConfig, OpenAIGeminiTTSConfig } from '../types';
+import { AppSettings, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, WebDavConfig, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, OPENAI_IMAGE_DEFAULT_CONFIG, GEMINI_TTS_VOICES, ApiProvider, OpenAIConfig, OpenAIGeminiTTSConfig, OpenAIImageConfig } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -176,7 +176,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <input 
                         type={showKey ? "text" : "password"}
                         value={settings.openaiConfig?.apiKey || ''}
-                        onChange={(e) => onSave({ ...settings, openaiConfig: { ...settings.openaiConfig, apiKey: e.target.value, baseUrl: settings.openaiConfig?.baseUrl || OPENAI_DEFAULT_CONFIG.baseUrl, model: settings.openaiConfig?.model || OPENAI_DEFAULT_CONFIG.model } })}
+                        onChange={(e) => onSave({ ...settings, openaiConfig: { ...OPENAI_DEFAULT_CONFIG, ...settings.openaiConfig, apiKey: e.target.value } })}
                         placeholder="sk-..."
                         className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 pr-10 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm font-mono"
                     />
@@ -194,7 +194,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <input
                     type="text"
                     value={settings.openaiConfig?.baseUrl || OPENAI_DEFAULT_CONFIG.baseUrl}
-                    onChange={(e) => onSave({ ...settings, openaiConfig: { ...settings.openaiConfig, baseUrl: e.target.value } })}
+                    onChange={(e) => onSave({ ...settings, openaiConfig: { ...OPENAI_DEFAULT_CONFIG, ...settings.openaiConfig, baseUrl: e.target.value } })}
                     placeholder="https://api.openai.com/v1"
                     className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
                   />
@@ -204,7 +204,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <input
                     type="text"
                     value={settings.openaiConfig?.model || OPENAI_DEFAULT_CONFIG.model}
-                    onChange={(e) => onSave({ ...settings, openaiConfig: { ...settings.openaiConfig, model: e.target.value } })}
+                    onChange={(e) => onSave({ ...settings, openaiConfig: { ...OPENAI_DEFAULT_CONFIG, ...settings.openaiConfig, model: e.target.value } })}
                     placeholder="gpt-4o"
                     className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm font-mono"
                   />
@@ -239,7 +239,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <input
                   type="text"
                   value={settings.openaiGeminiTTSConfig?.apiKey || ''}
-                  onChange={(e) => onSave({ ...settings, openaiGeminiTTSConfig: { ...settings.openaiGeminiTTSConfig, apiKey: e.target.value } })}
+                  onChange={(e) => onSave({ ...settings, openaiGeminiTTSConfig: { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG, ...settings.openaiGeminiTTSConfig, apiKey: e.target.value } })}
                   placeholder="Enter API key for Gemini TTS relay"
                   className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none text-sm"
                 />
@@ -249,7 +249,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <input
                   type="text"
                   value={settings.openaiGeminiTTSConfig?.baseUrl || ''}
-                  onChange={(e) => onSave({ ...settings, openaiGeminiTTSConfig: { ...settings.openaiGeminiTTSConfig, baseUrl: e.target.value } })}
+                  onChange={(e) => onSave({ ...settings, openaiGeminiTTSConfig: { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG, ...settings.openaiGeminiTTSConfig, baseUrl: e.target.value } })}
                   placeholder="https://your-relay-service.com/v1"
                   className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none text-sm"
                 />
@@ -259,7 +259,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <input
                   type="text"
                   value={settings.openaiGeminiTTSConfig?.model || OPENAI_GEMINI_TTS_DEFAULT_CONFIG.model}
-                  onChange={(e) => onSave({ ...settings, openaiGeminiTTSConfig: { ...settings.openaiGeminiTTSConfig, model: e.target.value } })}
+                  onChange={(e) => onSave({ ...settings, openaiGeminiTTSConfig: { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG, ...settings.openaiGeminiTTSConfig, model: e.target.value } })}
                   placeholder="gemini-2.5-flash-preview-tts"
                   className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none text-sm font-mono"
                 />
@@ -268,7 +268,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Voice</label>
                 <select
                   value={settings.openaiGeminiTTSConfig?.voiceName || OPENAI_GEMINI_TTS_DEFAULT_CONFIG.voiceName}
-                  onChange={(e) => onSave({ ...settings, openaiGeminiTTSConfig: { ...settings.openaiGeminiTTSConfig, voiceName: e.target.value } })}
+                  onChange={(e) => onSave({ ...settings, openaiGeminiTTSConfig: { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG, ...settings.openaiGeminiTTSConfig, voiceName: e.target.value } })}
                   className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none text-sm"
                 >
                   {GEMINI_TTS_VOICES.map(v => (
@@ -280,6 +280,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400 text-xs font-medium">
                       <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
                       Gemini TTS Configured
+                  </div>
+              )}
+            </div>
+          </div>
+          )}
+
+          <div className="border-t border-gray-200 dark:border-neutral-800"></div>
+
+          {/* OpenAI 格式的图片生成配置 */}
+          {settings.apiProvider === 'openai' && (
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <ImageIcon size={14} className="text-green-500" /> Image Generation (OpenAI Format)
+            </h3>
+            <div className="bg-gray-50 dark:bg-neutral-850 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 space-y-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Configure image generation via OpenAI-compatible API endpoint.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
+                <input
+                  type="text"
+                  value={settings.openaiImageConfig?.apiKey || ''}
+                  onChange={(e) => onSave({ ...settings, openaiImageConfig: { ...OPENAI_IMAGE_DEFAULT_CONFIG, ...settings.openaiImageConfig, apiKey: e.target.value } })}
+                  placeholder="Enter API key for image generation"
+                  className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Base URL</label>
+                <input
+                  type="text"
+                  value={settings.openaiImageConfig?.baseUrl || ''}
+                  onChange={(e) => onSave({ ...settings, openaiImageConfig: { ...OPENAI_IMAGE_DEFAULT_CONFIG, ...settings.openaiImageConfig, baseUrl: e.target.value } })}
+                  placeholder="https://api.openai.com/v1"
+                  className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model</label>
+                <input
+                  type="text"
+                  value={settings.openaiImageConfig?.model || OPENAI_IMAGE_DEFAULT_CONFIG.model}
+                  onChange={(e) => onSave({ ...settings, openaiImageConfig: { ...OPENAI_IMAGE_DEFAULT_CONFIG, ...settings.openaiImageConfig, model: e.target.value } })}
+                  placeholder="dall-e-3"
+                  className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-sm font-mono"
+                />
+              </div>
+              {settings.openaiImageConfig?.apiKey && settings.openaiImageConfig?.baseUrl && (
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-xs font-medium">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                      Image Generation Configured
                   </div>
               )}
             </div>

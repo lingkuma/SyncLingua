@@ -336,3 +336,61 @@ export const generateSpeech = async (
     throw new Error(userMessage);
   }
 };
+
+// OpenAI 格式的图片生成（使用 chat completions 端点）
+export const generateImage = async (
+  config: OpenAIConfig,
+  prompt: string,
+  size: string = "1792x1024"
+): Promise<string> => {
+  if (!config.apiKey) throw new Error("API Key missing");
+  if (!config.baseUrl) throw new Error("Base URL missing for image generation");
+
+  try {
+    // 使用 chat completions 端点生成图片
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: 'user', content: prompt }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || errorData.detail?.[0]?.msg || `Image API Error: ${response.status}`);
+    }
+
+    const jsonData = await response.json();
+    
+    // 检查返回的图片数据 - 可能在不同位置
+    const imageData = jsonData.choices?.[0]?.message?.image?.data || 
+                      jsonData.choices?.[0]?.message?.content?.image?.data ||
+                      jsonData.data?.[0]?.b64_json;
+    const imageUrl = jsonData.choices?.[0]?.message?.image?.url ||
+                     jsonData.choices?.[0]?.message?.content?.url ||
+                     jsonData.data?.[0]?.url;
+    
+    if (imageData) {
+      // 返回 base64 数据 URL
+      return `data:image/png;base64,${imageData}`;
+    } else if (imageUrl) {
+      // 返回图片 URL
+      return imageUrl;
+    } else {
+      // 如果没有找到图片，打印响应结构以便调试
+      console.log("Image API Response:", JSON.stringify(jsonData, null, 2));
+      throw new Error("No image data returned from API");
+    }
+
+  } catch (error: any) {
+    console.error("OpenAI Image Generation Error:", error);
+    throw error;
+  }
+};
