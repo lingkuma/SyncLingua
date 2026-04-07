@@ -267,22 +267,29 @@ export const generateSpeech = async (
           { role: 'user', content: finalText }
         ],
         // Gemini TTS 特定参数（通过中转服务传递）
-        voice: config.voiceName,
-        response_format: 'audio'
+        voice: config.voiceName
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `TTS API Error: ${response.status}`);
+      throw new Error(errorData.error?.message || errorData.detail?.[0]?.msg || `TTS API Error: ${response.status}`);
     }
 
-    // 检查响应类型
-    const contentType = response.headers.get('content-type') || '';
+    // 解析 JSON 响应
+    const jsonData = await response.json();
     
-    if (contentType.includes('audio')) {
-      // 直接返回音频数据
-      const arrayBuffer = await response.arrayBuffer();
+    // 检查是否有音频数据在 choices[0].message.audio.data
+    const audioData = jsonData.choices?.[0]?.message?.audio?.data;
+    
+    if (audioData) {
+      // 解码 base64 音频数据
+      const binaryString = atob(audioData);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
       
       let audioContext = existingContext;
       let shouldCloseContext = false;
@@ -296,7 +303,8 @@ export const generateSpeech = async (
         await audioContext.resume();
       }
 
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      // 解码 WAV 音频
+      const audioBuffer = await audioContext.decodeAudioData(bytes.buffer);
 
       if (shouldCloseContext && audioContext.state !== 'closed') {
         await audioContext.close();
@@ -304,9 +312,9 @@ export const generateSpeech = async (
 
       return audioBuffer;
     } else {
-      // 可能返回了 JSON 错误
-      const jsonData = await response.json();
-      throw new Error(jsonData.error?.message || "Unexpected response format from TTS API");
+      // 检查是否有错误信息
+      const errorMsg = jsonData.error?.message || jsonData.choices?.[0]?.message?.content || "No audio data returned from TTS API";
+      throw new Error(errorMsg);
     }
 
   } catch (error: any) {
