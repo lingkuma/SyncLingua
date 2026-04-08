@@ -348,7 +348,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </h3>
             <div className="bg-gray-50 dark:bg-neutral-850 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 space-y-3">
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Configure speech recognition via OpenAI-compatible API endpoint.
+                Configure speech recognition via OpenAI-compatible API endpoint. Gemini-style multimodal STT models use `chat/completions` automatically.
               </p>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
@@ -376,7 +376,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="text"
                   value={settings.openaiSTTConfig?.model || OPENAI_STT_DEFAULT_CONFIG.model}
                   onChange={(e) => onSave({ ...settings, openaiSTTConfig: { ...OPENAI_STT_DEFAULT_CONFIG, ...settings.openaiSTTConfig, model: e.target.value } })}
-                  placeholder="whisper-1"
+                  placeholder="whisper-1 or gemini-2.5-flash"
                   className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-mono"
                 />
               </div>

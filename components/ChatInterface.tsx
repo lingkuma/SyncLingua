@@ -235,48 +235,63 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
   };
 
   const handleTranscription = async (audioBlob: Blob, target: 'main' | 'aux') => {
-      if (!settings.apiKey) {
-          alert("API Key missing. Cannot transcribe.");
+      const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
+      const geminiApiKey = settings.apiKey?.trim() || '';
+      const sttConfig = {
+          apiKey: settings.openaiSTTConfig?.apiKey?.trim() || '',
+          baseUrl: settings.openaiSTTConfig?.baseUrl?.trim() || OPENAI_STT_DEFAULT_CONFIG.baseUrl,
+          model: settings.openaiSTTConfig?.model?.trim() || OPENAI_STT_DEFAULT_CONFIG.model
+      };
+
+      if (isGemini && !geminiApiKey) {
+          alert("Please set your Google Gemini API Key in Settings first.");
+          return;
+      }
+
+      if (!isGemini && !sttConfig.apiKey) {
+          alert("Please configure Speech-to-Text API Key in Settings first.");
           return;
       }
 
       setIsTranscribing(true);
       try {
-          // Convert Blob to Base64
-          const reader = new FileReader();
-          reader.readAsDataURL(audioBlob);
-          reader.onloadend = async () => {
-              const base64String = reader.result as string;
-              // Remove data URL prefix (e.g., "data:audio/webm;base64,")
-              const base64Data = base64String.split(',')[1];
-              const mimeType = base64String.split(',')[0].split(':')[1].split(';')[0];
+          const base64String = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                  if (typeof reader.result !== 'string') {
+                      reject(new Error("Failed to read recorded audio."));
+                      return;
+                  }
+                  resolve(reader.result);
+              };
+              reader.onerror = () => reject(reader.error || new Error("Failed to read recorded audio."));
+              reader.readAsDataURL(audioBlob);
+          });
+          // Remove data URL prefix (e.g., "data:audio/webm;base64,")
+          const base64Data = base64String.split(',')[1];
+          const mimeType = base64String.split(',')[0].split(':')[1].split(';')[0];
 
               // 根据提供商选择不同的语音识别 API
-              const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
-              let text: string;
+          let text: string;
               
-              if (isGemini) {
+          if (isGemini) {
                   // Gemini 语音识别
-                  text = await geminiTranscribeUserAudio(settings.apiKey, base64Data, mimeType);
-              } else {
+              text = await geminiTranscribeUserAudio(geminiApiKey, base64Data, mimeType);
+          } else {
                   // OpenAI 格式语音识别
-                  const sttConfig = {
-                      apiKey: settings.openaiSTTConfig?.apiKey || '',
-                      baseUrl: settings.openaiSTTConfig?.baseUrl || OPENAI_STT_DEFAULT_CONFIG.baseUrl,
-                      model: settings.openaiSTTConfig?.model || OPENAI_STT_DEFAULT_CONFIG.model
-                  };
-                  text = await openaiTranscribeAudio(sttConfig, base64Data, mimeType);
-              }
+              text = await openaiTranscribeAudio(sttConfig, base64Data, mimeType);
+          }
               
-              if (target === 'main') {
-                  setInputMain(prev => (prev + " " + text).trim());
-              } else {
-                  setInputAux(prev => (prev + " " + text).trim());
-              }
-              setIsTranscribing(false);
-          };
+          if (target === 'main') {
+              setInputMain(prev => (prev + " " + text).trim());
+          } else {
+              setInputAux(prev => (prev + " " + text).trim());
+          }
       } catch (e) {
           console.error("Transcription failed", e);
+          const message = e instanceof Error ? e.message : "Please check your transcription settings.";
+          alert(`Transcription failed: ${message}`);
+      } finally {
           setIsTranscribing(false);
       }
   };

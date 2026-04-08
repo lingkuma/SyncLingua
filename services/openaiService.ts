@@ -396,6 +396,89 @@ export const generateImage = async (
 };
 
 // OpenAI 格式的语音识别（STT）
+const getAudioFormatFromMimeType = (mimeType: string): string => {
+  if (mimeType.includes('mp3') || mimeType.includes('mpeg')) return 'mp3';
+  if (mimeType.includes('wav')) return 'wav';
+  if (mimeType.includes('ogg')) return 'ogg';
+  if (mimeType.includes('m4a') || mimeType.includes('mp4')) return 'm4a';
+  if (mimeType.includes('webm')) return 'webm';
+
+  return mimeType.split('/')[1]?.split(';')[0] || 'webm';
+};
+
+const shouldUseChatCompletionsForSTT = (config: OpenAISTTConfig): boolean => {
+  const model = config.model.toLowerCase();
+  const baseUrl = config.baseUrl.toLowerCase();
+
+  return model.includes('gemini') || baseUrl.includes('generativelanguage.googleapis.com');
+};
+
+const extractTextFromChatCompletion = (content: unknown): string => {
+  if (typeof content === 'string') return content.trim();
+
+  if (Array.isArray(content)) {
+    return content
+      .map(part => {
+        if (typeof part === 'string') return part;
+        if (part && typeof part === 'object' && 'text' in part && typeof (part as { text?: unknown }).text === 'string') {
+          return (part as { text: string }).text;
+        }
+        return '';
+      })
+      .join('')
+      .trim();
+  }
+
+  return '';
+};
+
+const transcribeAudioViaChatCompletions = async (
+  config: OpenAISTTConfig,
+  base64Audio: string,
+  mimeType: string
+): Promise<string> => {
+  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.apiKey}`
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Transcribe this audio exactly as spoken. Return only the transcription. If the audio is silent or unintelligible, return an empty string.'
+            },
+            {
+              type: 'input_audio',
+              input_audio: {
+                data: base64Audio,
+                format: getAudioFormatFromMimeType(mimeType)
+              }
+            }
+          ]
+        }
+      ],
+      temperature: 0
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || errorData.detail?.[0]?.msg || `STT API Error: ${response.status}`);
+  }
+
+  const jsonData = await response.json();
+  const text = extractTextFromChatCompletion(jsonData.choices?.[0]?.message?.content);
+  if (text) return text;
+
+  throw new Error("No transcription text returned from chat/completions.");
+};
+
 export const transcribeAudio = async (
   config: OpenAISTTConfig,
   base64Audio: string,
@@ -405,6 +488,10 @@ export const transcribeAudio = async (
   if (!config.baseUrl) throw new Error("Base URL missing for STT");
 
   try {
+    if (shouldUseChatCompletionsForSTT(config)) {
+      return await transcribeAudioViaChatCompletions(config, base64Audio, mimeType);
+    }
+
     // 将 base64 转换为 Blob
     const binaryString = atob(base64Audio);
     const len = binaryString.length;
@@ -414,36 +501,35 @@ export const transcribeAudio = async (
     }
     
     // 根据 mimeType 确定文件扩展名
-    let extension = 'webm';
-    if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
-      extension = 'mp3';
-    } else if (mimeType.includes('wav')) {
-      extension = 'wav';
-    } else if (mimeType.includes('ogg')) {
-      extension = 'ogg';
-    } else if (mimeType.includes('m4a')) {
-      extension = 'm4a';
-    }
+const extension = getAudioFormatFromMimeType(mimeType);
     
     const blob = new Blob([bytes], { type: mimeType });
-    const file = new File([blob], `audio.${extension}`, { type: mimeType });
+    const fileExtension = getAudioFormatFromMimeType(mimeType);
+    const file = new File([blob], `audio.${fileExtension}`, { type: mimeType });
 
     // 使用 FormData 格式发送请求
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('model', config.model);
+    const transcriptionFormData = new FormData();
+    transcriptionFormData.append('file', file);
+    transcriptionFormData.append('model', config.model);
 
     const response = await fetch(`${config.baseUrl}/audio/transcriptions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${config.apiKey}`
       },
-      body: formData
+      body: transcriptionFormData
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || errorData.detail?.[0]?.msg || `STT API Error: ${response.status}`);
+      const errorMessage = errorData.error?.message || errorData.detail?.[0]?.msg || `STT API Error: ${response.status}`;
+
+      if (response.status === 404 || response.status === 405) {
+        return await transcribeAudioViaChatCompletions(config, base64Audio, mimeType);
+      }
+
+      throw new Error(errorMessage);
     }
 
     const jsonData = await response.json();
