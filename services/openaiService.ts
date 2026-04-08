@@ -1,4 +1,4 @@
-import { Message, OpenAIConfig, OpenAIGeminiTTSConfig, GEMINI_TTS_VOICES } from '../types';
+import { Message, OpenAIConfig, OpenAIGeminiTTSConfig, OpenAISTTConfig, GEMINI_TTS_VOICES } from '../types';
 
 // OpenAI API 流式聊天
 export const streamChat = async (
@@ -391,6 +391,66 @@ export const generateImage = async (
 
   } catch (error: any) {
     console.error("OpenAI Image Generation Error:", error);
+    throw error;
+  }
+};
+
+// OpenAI 格式的语音识别（STT）
+export const transcribeAudio = async (
+  config: OpenAISTTConfig,
+  base64Audio: string,
+  mimeType: string
+): Promise<string> => {
+  if (!config.apiKey) throw new Error("API Key missing");
+  if (!config.baseUrl) throw new Error("Base URL missing for STT");
+
+  try {
+    // 将 base64 转换为 Blob
+    const binaryString = atob(base64Audio);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    // 根据 mimeType 确定文件扩展名
+    let extension = 'webm';
+    if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
+      extension = 'mp3';
+    } else if (mimeType.includes('wav')) {
+      extension = 'wav';
+    } else if (mimeType.includes('ogg')) {
+      extension = 'ogg';
+    } else if (mimeType.includes('m4a')) {
+      extension = 'm4a';
+    }
+    
+    const blob = new Blob([bytes], { type: mimeType });
+    const file = new File([blob], `audio.${extension}`, { type: mimeType });
+
+    // 使用 FormData 格式发送请求
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('model', config.model);
+
+    const response = await fetch(`${config.baseUrl}/audio/transcriptions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || errorData.detail?.[0]?.msg || `STT API Error: ${response.status}`);
+    }
+
+    const jsonData = await response.json();
+    return jsonData.text || "";
+
+  } catch (error: any) {
+    console.error("OpenAI STT Error:", error);
     throw error;
   }
 };

@@ -112,6 +112,13 @@ export interface OpenAIImageConfig {
   model: string;
 }
 
+// OpenAI 格式的语音识别配置
+export interface OpenAISTTConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 export interface AppSettings {
   model: string;
   imageModel: string; // New: Model for generating images
@@ -124,6 +131,7 @@ export interface AppSettings {
   openaiConfig?: OpenAIConfig; // OpenAI 配置
   openaiGeminiTTSConfig?: OpenAIGeminiTTSConfig; // OpenAI 格式的 Gemini TTS 配置
   openaiImageConfig?: OpenAIImageConfig; // OpenAI 格式的图片生成配置
+  openaiSTTConfig?: OpenAISTTConfig; // OpenAI 格式的语音识别配置
 }
 
 export const DEFAULT_MODELS = [
@@ -232,4 +240,11 @@ export const OPENAI_IMAGE_DEFAULT_CONFIG: OpenAIImageConfig = {
   apiKey: '',
   baseUrl: 'https://api.openai.com/v1',
   model: 'dall-e-3'
+};
+
+// OpenAI 格式的语音识别默认配置
+export const OPENAI_STT_DEFAULT_CONFIG: OpenAISTTConfig = {
+  apiKey: '',
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'whisper-1'
 };

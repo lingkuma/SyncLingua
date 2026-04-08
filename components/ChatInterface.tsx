@@ -2,9 +2,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Bot, User, Trash2, Plus, RefreshCw, Copy, Layers, Volume2, Loader2, StopCircle, X, Zap, TriangleAlert, Lock, Globe, LayoutTemplate, Info, Image as ImageIcon, MessageSquare, Menu, PanelLeftOpen, Mic } from 'lucide-react';
-import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, OPENAI_IMAGE_DEFAULT_CONFIG } from '../types';
-import { streamChat as geminiStreamChat, generateAuxiliaryResponse as geminiGenerateAuxiliaryResponse, generateSpeech as geminiGenerateSpeech, generateSceneImage as geminiGenerateSceneImage, transcribeUserAudio } from '../services/geminiService';
-import { streamChat as openaiStreamChat, generateAuxiliaryResponse as openaiGenerateAuxiliaryResponse, generateSpeech as openaiGeminiGenerateSpeech, generateImage as openaiGenerateImage } from '../services/openaiService';
+import { Message, Session, Preset, AppSettings, AuxTab, SystemTemplate, ImageTemplate, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, OPENAI_IMAGE_DEFAULT_CONFIG, OPENAI_STT_DEFAULT_CONFIG } from '../types';
+import { streamChat as geminiStreamChat, generateAuxiliaryResponse as geminiGenerateAuxiliaryResponse, generateSpeech as geminiGenerateSpeech, generateSceneImage as geminiGenerateSceneImage, transcribeUserAudio as geminiTranscribeUserAudio } from '../services/geminiService';
+import { streamChat as openaiStreamChat, generateAuxiliaryResponse as openaiGenerateAuxiliaryResponse, generateSpeech as openaiGeminiGenerateSpeech, generateImage as openaiGenerateImage, transcribeAudio as openaiTranscribeAudio } from '../services/openaiService';
 import { generateSpeechStream } from '../services/minimaxService';
 import { saveImageToCache } from '../services/imageDb';
 
@@ -251,7 +251,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ session, updateSes
               const base64Data = base64String.split(',')[1];
               const mimeType = base64String.split(',')[0].split(':')[1].split(';')[0];
 
-              const text = await transcribeUserAudio(settings.apiKey, base64Data, mimeType);
+              // 根据提供商选择不同的语音识别 API
+              const isGemini = settings.apiProvider === 'gemini' || !settings.apiProvider;
+              let text: string;
+              
+              if (isGemini) {
+                  // Gemini 语音识别
+                  text = await geminiTranscribeUserAudio(settings.apiKey, base64Data, mimeType);
+              } else {
+                  // OpenAI 格式语音识别
+                  const sttConfig = {
+                      apiKey: settings.openaiSTTConfig?.apiKey || '',
+                      baseUrl: settings.openaiSTTConfig?.baseUrl || OPENAI_STT_DEFAULT_CONFIG.baseUrl,
+                      model: settings.openaiSTTConfig?.model || OPENAI_STT_DEFAULT_CONFIG.model
+                  };
+                  text = await openaiTranscribeAudio(sttConfig, base64Data, mimeType);
+              }
               
               if (target === 'main') {
                   setInputMain(prev => (prev + " " + text).trim());

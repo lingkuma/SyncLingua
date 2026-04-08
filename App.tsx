@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Book, MessageSquare, Plus, Pencil, Trash2, LayoutGrid, Github, Menu, PanelLeftClose, PanelLeftOpen, Maximize, Minimize, CloudUpload, CloudDownload } from 'lucide-react';
-import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, ImageTemplate, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, OPENAI_IMAGE_DEFAULT_CONFIG } from './types';
+import { Preset, Session, SessionPreset, AppSettings, SystemTemplate, ImageTemplate, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, OPENAI_IMAGE_DEFAULT_CONFIG, OPENAI_STT_DEFAULT_CONFIG } from './types';
 import { SettingsModal } from './components/SettingsModal';
 import { PresetManager } from './components/PresetManager';
 import { ChatInterface } from './components/ChatInterface';
@@ -154,7 +154,8 @@ const App: React.FC = () => {
               apiProvider: saved.apiProvider || 'gemini',
               openaiConfig: saved.openaiConfig || { ...OPENAI_DEFAULT_CONFIG },
               openaiGeminiTTSConfig: saved.openaiGeminiTTSConfig || { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG },
-              openaiImageConfig: saved.openaiImageConfig || { ...OPENAI_IMAGE_DEFAULT_CONFIG }
+              openaiImageConfig: saved.openaiImageConfig || { ...OPENAI_IMAGE_DEFAULT_CONFIG },
+              openaiSTTConfig: saved.openaiSTTConfig || { ...OPENAI_STT_DEFAULT_CONFIG }
           };
       }
       return { 
@@ -166,7 +167,8 @@ const App: React.FC = () => {
           apiProvider: 'gemini',
           openaiConfig: { ...OPENAI_DEFAULT_CONFIG },
           openaiGeminiTTSConfig: { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG },
-          openaiImageConfig: { ...OPENAI_IMAGE_DEFAULT_CONFIG }
+          openaiImageConfig: { ...OPENAI_IMAGE_DEFAULT_CONFIG },
+          openaiSTTConfig: { ...OPENAI_STT_DEFAULT_CONFIG }
       };
   });
 

@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { X, Settings as SettingsIcon, Download, Upload, Key, Eye, EyeOff, Sun, Moon, Monitor, Cloud, CloudUpload, CloudDownload, RefreshCw, Image as ImageIcon, Volume2, Zap } from 'lucide-react';
-import { AppSettings, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, WebDavConfig, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, OPENAI_IMAGE_DEFAULT_CONFIG, GEMINI_TTS_VOICES, ApiProvider, OpenAIConfig, OpenAIGeminiTTSConfig, OpenAIImageConfig } from '../types';
+import { AppSettings, DEFAULT_MODELS, DEFAULT_IMAGE_MODELS, WebDavConfig, MINIMAX_DEFAULT_CONFIG, MINIMAX_VOICES, MINIMAX_MODELS, MINIMAX_EMOTIONS, OPENAI_DEFAULT_CONFIG, OPENAI_GEMINI_TTS_DEFAULT_CONFIG, OPENAI_IMAGE_DEFAULT_CONFIG, OPENAI_STT_DEFAULT_CONFIG, GEMINI_TTS_VOICES, ApiProvider, OpenAIConfig, OpenAIGeminiTTSConfig, OpenAIImageConfig, OpenAISTTConfig } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -332,6 +332,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-xs font-medium">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
                       Image Generation Configured
+                  </div>
+              )}
+            </div>
+          </div>
+          )}
+
+          <div className="border-t border-gray-200 dark:border-neutral-800"></div>
+
+          {/* OpenAI 格式的语音识别配置 */}
+          {settings.apiProvider === 'openai' && (
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Zap size={14} className="text-blue-500" /> Speech-to-Text (OpenAI Format)
+            </h3>
+            <div className="bg-gray-50 dark:bg-neutral-850 border border-gray-200 dark:border-neutral-800 rounded-xl p-4 space-y-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Configure speech recognition via OpenAI-compatible API endpoint.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
+                <input
+                  type="text"
+                  value={settings.openaiSTTConfig?.apiKey || ''}
+                  onChange={(e) => onSave({ ...settings, openaiSTTConfig: { ...OPENAI_STT_DEFAULT_CONFIG, ...settings.openaiSTTConfig, apiKey: e.target.value } })}
+                  placeholder="Enter API key for speech recognition"
+                  className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Base URL</label>
+                <input
+                  type="text"
+                  value={settings.openaiSTTConfig?.baseUrl || ''}
+                  onChange={(e) => onSave({ ...settings, openaiSTTConfig: { ...OPENAI_STT_DEFAULT_CONFIG, ...settings.openaiSTTConfig, baseUrl: e.target.value } })}
+                  placeholder="https://api.openai.com/v1"
+                  className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model</label>
+                <input
+                  type="text"
+                  value={settings.openaiSTTConfig?.model || OPENAI_STT_DEFAULT_CONFIG.model}
+                  onChange={(e) => onSave({ ...settings, openaiSTTConfig: { ...OPENAI_STT_DEFAULT_CONFIG, ...settings.openaiSTTConfig, model: e.target.value } })}
+                  placeholder="whisper-1"
+                  className="w-full bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-neutral-700 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-mono"
+                />
+              </div>
+              {settings.openaiSTTConfig?.apiKey && settings.openaiSTTConfig?.baseUrl && (
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs font-medium">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                      Speech-to-Text Configured
                   </div>
               )}
             </div>
