@@ -24,7 +24,7 @@ const INITIAL_TEMPLATES: SystemTemplate[] = [
         id: 'st2',
         title: 'Friendly Tutor (Corrections)',
         content: `ROLE:
-You are a friendly language tutor. 
+You are a friendly language tutor.
 1. Maintain the conversation naturally.
 2. Implicitly correct mistakes in your response (Recast).
 3. Do not stop the flow to explain grammar unless asked.`
@@ -57,10 +57,10 @@ const INITIAL_IMAGE_TEMPLATES: ImageTemplate[] = [
 ];
 
 const INITIAL_MAIN_PRESETS: Preset[] = [
-  { 
-      id: 'mp1', 
-      title: 'German Supermarket', 
-      type: 'main', 
+  {
+      id: 'mp1',
+      title: 'German Supermarket',
+      type: 'main',
       systemTemplateId: 'st3', // Uses "Professional Service" template
       systemPrompt: 'You are a cashier at a German supermarket (Edeka). Ask for a loyalty card (DeutschlandCard). Speak only German.',
       sharedPrompt: 'The user is a customer buying groceries at a checkout counter in Berlin. It is rush hour.',
@@ -72,10 +72,10 @@ const INITIAL_MAIN_PRESETS: Preset[] = [
           specificPrompt: 'A supermarket checkout counter, German products on belt, cashier view.'
       }
   },
-  { 
-      id: 'mp2', 
-      title: 'Job Interview (English)', 
-      type: 'main', 
+  {
+      id: 'mp2',
+      title: 'Job Interview (English)',
+      type: 'main',
       systemTemplateId: 'st1', // Uses "Strict Roleplay"
       systemPrompt: 'You are a hiring manager at a tech company. Conduct a behavioral interview. Ask follow-up questions. Maintain a slightly intimidating tone.',
       sharedPrompt: 'The user is applying for a Senior Frontend Developer role. This is the second round of interviews.',
@@ -103,6 +103,63 @@ const STORAGE_KEYS = {
     ACTIVE_SESSION: 'synclingua_active_session_id'
 };
 
+const URL_API_PARAM_ALIASES = {
+    mode: ['apiMode', 'mode', 'provider', 'apiProvider'],
+    apiKey: ['apiKey', 'key'],
+    openaiApiKey: ['openaiApiKey', 'apiKey', 'key'],
+    baseUrl: ['baseUrl', 'apiBaseUrl', 'openaiBaseUrl'],
+    model: ['model', 'openaiModel']
+};
+
+const getFirstUrlParam = (params: URLSearchParams, names: string[]): string | undefined => {
+    for (const name of names) {
+        const value = params.get(name);
+        if (value !== null && value.trim()) return value.trim();
+    }
+    return undefined;
+};
+
+const normalizeBaseUrl = (baseUrl: string): string => baseUrl.trim().replace(/\/+$/, '');
+
+const getApiConfigFromUrl = (): Partial<AppSettings> | null => {
+    if (typeof window === 'undefined') return null;
+
+    const params = new URLSearchParams(window.location.search);
+    const rawMode = getFirstUrlParam(params, URL_API_PARAM_ALIASES.mode)?.toLowerCase();
+    const hasOpenAIParams = URL_API_PARAM_ALIASES.baseUrl.some(name => params.has(name))
+        || URL_API_PARAM_ALIASES.model.some(name => params.has(name))
+        || params.has('openaiApiKey');
+    const isOpenAI = rawMode === 'openai' || hasOpenAIParams;
+    const isGeneric = ['generic', 'general', 'gemini', 'universal'].includes(rawMode || '');
+
+    if (isOpenAI) {
+        const apiKey = getFirstUrlParam(params, URL_API_PARAM_ALIASES.openaiApiKey);
+        const baseUrl = getFirstUrlParam(params, URL_API_PARAM_ALIASES.baseUrl);
+        const model = getFirstUrlParam(params, URL_API_PARAM_ALIASES.model);
+
+        return {
+            apiProvider: 'openai',
+            openaiConfig: {
+                ...OPENAI_DEFAULT_CONFIG,
+                ...(apiKey ? { apiKey } : {}),
+                ...(baseUrl ? { baseUrl: normalizeBaseUrl(baseUrl) } : {}),
+                ...(model ? { model } : {})
+            }
+        };
+    }
+
+    const apiKey = getFirstUrlParam(params, URL_API_PARAM_ALIASES.apiKey);
+    if (apiKey && (!rawMode || isGeneric)) {
+        return {
+            apiProvider: 'gemini',
+            apiKey
+        };
+    }
+
+    return null;
+};
+
+
 const App: React.FC = () => {
   // Persistence Helpers
   const loadState = <T,>(key: string, defaultVal: T): T => {
@@ -118,25 +175,26 @@ const App: React.FC = () => {
   // State
   const [sessions, setSessions] = useState<Session[]>(() => loadState(STORAGE_KEYS.SESSIONS, []));
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => loadState(STORAGE_KEYS.ACTIVE_SESSION, null));
-  
-  const [presets, setPresets] = useState<Preset[]>(() => 
+
+  const [presets, setPresets] = useState<Preset[]>(() =>
       loadState(STORAGE_KEYS.PRESETS, [...INITIAL_MAIN_PRESETS, ...INITIAL_AUX_PRESETS])
   );
-  
-  const [systemTemplates, setSystemTemplates] = useState<SystemTemplate[]>(() => 
+
+  const [systemTemplates, setSystemTemplates] = useState<SystemTemplate[]>(() =>
     loadState(STORAGE_KEYS.TEMPLATES, INITIAL_TEMPLATES)
   );
 
-  const [imageTemplates, setImageTemplates] = useState<ImageTemplate[]>(() => 
+  const [imageTemplates, setImageTemplates] = useState<ImageTemplate[]>(() =>
     loadState(STORAGE_KEYS.IMAGE_TEMPLATES, INITIAL_IMAGE_TEMPLATES)
   );
 
-  const [sessionPresets, setSessionPresets] = useState<SessionPreset[]>(() => 
+  const [sessionPresets, setSessionPresets] = useState<SessionPreset[]>(() =>
       loadState(STORAGE_KEYS.SESSION_PRESETS, INITIAL_SESSION_PRESETS)
   );
-  
+
   const [settings, setSettings] = useState<AppSettings>(() => {
       const saved = loadState<AppSettings | null>(STORAGE_KEYS.SETTINGS, null);
+      const urlApiConfig = getApiConfigFromUrl();
       let envKey = '';
       try {
         if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
@@ -144,24 +202,21 @@ const App: React.FC = () => {
         }
       } catch(e) {}
 
-      if (saved) {
-          return {
-              ...saved,
-              apiKey: saved.apiKey || envKey,
-              imageModel: saved.imageModel || DEFAULT_IMAGE_MODELS[0].id,
-              theme: saved.theme || 'auto',
-              // 添加新配置项的默认值
-              apiProvider: saved.apiProvider || 'gemini',
-              openaiConfig: saved.openaiConfig || { ...OPENAI_DEFAULT_CONFIG },
-              openaiGeminiTTSConfig: saved.openaiGeminiTTSConfig || { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG },
-              openaiImageConfig: saved.openaiImageConfig || { ...OPENAI_IMAGE_DEFAULT_CONFIG },
-              openaiSTTConfig: saved.openaiSTTConfig || { ...OPENAI_STT_DEFAULT_CONFIG }
-          };
-      }
-      return { 
-          model: DEFAULT_MODELS[0].id, 
+      const baseSettings: AppSettings = saved ? {
+          ...saved,
+          apiKey: saved.apiKey || envKey,
+          imageModel: saved.imageModel || DEFAULT_IMAGE_MODELS[0].id,
+          theme: saved.theme || 'auto',
+          // 添加新配置项的默认值
+          apiProvider: saved.apiProvider || 'gemini',
+          openaiConfig: saved.openaiConfig || { ...OPENAI_DEFAULT_CONFIG },
+          openaiGeminiTTSConfig: saved.openaiGeminiTTSConfig || { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG },
+          openaiImageConfig: saved.openaiImageConfig || { ...OPENAI_IMAGE_DEFAULT_CONFIG },
+          openaiSTTConfig: saved.openaiSTTConfig || { ...OPENAI_STT_DEFAULT_CONFIG }
+      } : {
+          model: DEFAULT_MODELS[0].id,
           imageModel: DEFAULT_IMAGE_MODELS[0].id,
-          temperature: 0.7, 
+          temperature: 0.7,
           apiKey: envKey,
           theme: 'auto',
           apiProvider: 'gemini',
@@ -169,6 +224,16 @@ const App: React.FC = () => {
           openaiGeminiTTSConfig: { ...OPENAI_GEMINI_TTS_DEFAULT_CONFIG },
           openaiImageConfig: { ...OPENAI_IMAGE_DEFAULT_CONFIG },
           openaiSTTConfig: { ...OPENAI_STT_DEFAULT_CONFIG }
+      };
+
+      if (!urlApiConfig) return baseSettings;
+
+      return {
+          ...baseSettings,
+          ...urlApiConfig,
+          openaiConfig: urlApiConfig.openaiConfig
+              ? { ...OPENAI_DEFAULT_CONFIG, ...baseSettings.openaiConfig, ...urlApiConfig.openaiConfig }
+              : baseSettings.openaiConfig
       };
   });
 
@@ -204,13 +269,13 @@ const App: React.FC = () => {
 
 
   // Persistence Effects
-  useEffect(() => { 
+  useEffect(() => {
       // Strip images before saving to localStorage to avoid quota limits
       const lightSessions = sessions.map(s => ({ ...s, backgroundImageUrl: undefined }));
-      localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(lightSessions)); 
+      localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(lightSessions));
   }, [sessions]);
 
-  useEffect(() => { 
+  useEffect(() => {
       if (activeSessionId) localStorage.setItem(STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(activeSessionId));
       else localStorage.removeItem(STORAGE_KEYS.ACTIVE_SESSION);
   }, [activeSessionId]);
@@ -224,7 +289,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const loadBackground = async () => {
         if (!activeSessionId) return;
-        
+
         // Don't reload if we already have it in state
         const currentSession = sessions.find(s => s.id === activeSessionId);
         if (currentSession?.backgroundImageUrl) return;
@@ -232,9 +297,9 @@ const App: React.FC = () => {
         try {
             const cachedImage = await getImageFromCache(activeSessionId);
             if (cachedImage) {
-                setSessions(prev => prev.map(s => 
-                    s.id === activeSessionId 
-                    ? { ...s, backgroundImageUrl: cachedImage } 
+                setSessions(prev => prev.map(s =>
+                    s.id === activeSessionId
+                    ? { ...s, backgroundImageUrl: cachedImage }
                     : s
                 ));
             }
@@ -242,7 +307,7 @@ const App: React.FC = () => {
             console.error("Failed to load background image from cache", e);
         }
     };
-    
+
     loadBackground();
   }, [activeSessionId]);
 
@@ -254,7 +319,7 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
-  
+
   const toggleFullscreen = () => {
       if (!document.fullscreenElement) {
           document.documentElement.requestFullscreen().catch(err => {
@@ -278,7 +343,7 @@ const App: React.FC = () => {
           document.removeEventListener('fullscreenchange', handleFullscreenChange);
       };
   }, []);
-  
+
   // Custom Confirmation/Input Modal State
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [itemToRename, setItemToRename] = useState<{id: string, title: string} | null>(null);
@@ -292,8 +357,8 @@ const App: React.FC = () => {
 
   // Active Session Logic
   const activeSession = sessions.find(s => s.id === activeSessionId) || null;
-  const activeMainPreset = activeSession?.mainPresetId 
-    ? presets.find(p => p.id === activeSession.mainPresetId) 
+  const activeMainPreset = activeSession?.mainPresetId
+    ? presets.find(p => p.id === activeSession.mainPresetId)
     : undefined;
 
   const auxPresets = presets.filter(p => p.type === 'aux');
@@ -314,17 +379,17 @@ const App: React.FC = () => {
             presetId: apId,
             messages: []
         })),
-        activeAuxTabId: null, 
+        activeAuxTabId: null,
         createdAt: Date.now()
     };
-    
+
     if (newSession.auxTabs.length > 0) {
         newSession.activeAuxTabId = newSession.auxTabs[0].id;
     }
 
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
-    setIsSidebarOpen(false); 
+    setIsSidebarOpen(false);
   };
 
   const createEmptySession = () => {
@@ -339,7 +404,7 @@ const App: React.FC = () => {
     };
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newSession.id);
-    setIsSidebarOpen(false); 
+    setIsSidebarOpen(false);
   }
 
   const updateActiveSession = (updated: Session) => {
@@ -409,7 +474,7 @@ const App: React.FC = () => {
   const prepareBackupData = () => {
       // Strip images from backup
       const lightSessions = sessions.map(s => ({ ...s, backgroundImageUrl: undefined }));
-      
+
       return {
           version: 3,
           timestamp: Date.now(),
@@ -429,7 +494,7 @@ const App: React.FC = () => {
     const jsonString = JSON.stringify(backupData, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = `synclingua-backup-${new Date().toISOString().split('T')[0]}.json`;
@@ -510,7 +575,7 @@ const App: React.FC = () => {
 
   return (
     // Global Background Container
-    <div 
+    <div
         className="flex h-[calc(100vh+1px)] md:h-screen w-screen bg-white dark:bg-neutral-950 text-gray-900 dark:text-gray-100 font-sans bg-cover bg-center transition-all duration-1000 ease-in-out"
         style={{
             backgroundImage: activeSession?.backgroundImageUrl ? `url(${activeSession.backgroundImageUrl})` : 'none'
@@ -523,7 +588,7 @@ const App: React.FC = () => {
 
       {/* MOBILE OVERLAY */}
         {isSidebarOpen && (
-            <div 
+            <div
                className="md:hidden fixed inset-0 bg-black/50 z-40"
                onClick={() => setIsSidebarOpen(false)}
             ></div>
@@ -535,12 +600,12 @@ const App: React.FC = () => {
         } ${
             isSidebarCollapsed ? 'md:w-0 md:border-none md:translate-x-0' : 'md:w-64 md:translate-x-0 md:relative'
         } md:inset-auto md:z-10 md:flex-shrink-0`}>
-        
+
         {/* Inner Container to prevent squashing content during collapse */}
         <div className="w-64 flex flex-col h-full min-w-[16rem]">
             {/* Header */}
             <div className="p-4 border-b border-white/10 dark:border-white/5 flex items-center justify-between h-14 md:h-auto">
-                <div 
+                <div
                     onClick={goHome}
                     className="flex items-center gap-2 cursor-pointer hover:bg-white/10 dark:hover:bg-black/20 transition-colors p-1 rounded-lg -ml-1 pr-3"
                     title="Go to Dashboard"
@@ -552,15 +617,15 @@ const App: React.FC = () => {
                 </div>
                 {/* Action Buttons */}
                 <div className="flex items-center gap-1">
-                    <button 
+                    <button
                         onClick={toggleFullscreen}
                         className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
                         title={isFullscreen ? "退出全屏" : "全屏模式"}
                     >
                         {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
                     </button>
-                    <button 
-                        onClick={() => setIsSidebarCollapsed(true)} 
+                    <button
+                        onClick={() => setIsSidebarCollapsed(true)}
                         className="hidden md:flex text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-1 rounded-md hover:bg-white/20 dark:hover:bg-black/20 transition-colors"
                         title="Collapse Sidebar"
                     >
@@ -571,18 +636,18 @@ const App: React.FC = () => {
 
             {/* Navigation */}
             <div className="p-4 space-y-2">
-                <button 
+                <button
                     onClick={goHome}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium ${
-                        !activeSessionId 
-                        ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-900/20 backdrop-blur-sm' 
+                        !activeSessionId
+                        ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-900/20 backdrop-blur-sm'
                         : 'text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
                     }`}
                 >
                     <LayoutGrid size={18} /> Dashboard
                 </button>
 
-                <button 
+                <button
                     onClick={() => { setIsLibraryOpen(true); setIsSidebarOpen(false); }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all font-medium text-gray-600 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
                 >
@@ -629,18 +694,18 @@ const App: React.FC = () => {
                     )}
                 </div>
                 {sessions.map(s => (
-                    <div 
+                    <div
                         key={s.id}
                         className={`group relative mx-2 rounded-lg transition-all border ${
-                            activeSessionId === s.id 
-                            ? 'bg-white/20 dark:bg-black/40 border-white/20 dark:border-white/10 shadow-sm backdrop-blur-sm' 
+                            activeSessionId === s.id
+                            ? 'bg-white/20 dark:bg-black/40 border-white/20 dark:border-white/10 shadow-sm backdrop-blur-sm'
                             : 'border-transparent hover:bg-white/10 dark:hover:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                         }`}
                     >
                         {/* Main Click Target for Selection */}
-                        <div 
+                        <div
                             onClick={() => { setActiveSessionId(s.id); setIsSidebarOpen(false); }}
-                            className="p-3 pr-20 cursor-pointer select-none relative z-0" 
+                            className="p-3 pr-20 cursor-pointer select-none relative z-0"
                         >
                             <div className={`font-medium truncate text-sm ${activeSessionId === s.id ? 'text-indigo-700 dark:text-white' : 'text-current'}`}>
                                 {s.title}
@@ -649,24 +714,24 @@ const App: React.FC = () => {
                                 {new Date(s.createdAt).toLocaleDateString()}
                             </div>
                         </div>
-                        
+
                         {/* Action Buttons */}
-                        <div 
+                        <div
                             className={`absolute right-2 top-2 flex gap-1 z-10 ${
                                 activeSessionId === s.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                             } transition-opacity duration-200`}
                         >
-                            <button 
+                            <button
                                 type="button"
-                                onClick={(e) => promptRenameSession(e, s.id)} 
+                                onClick={(e) => promptRenameSession(e, s.id)}
                                 className="flex items-center justify-center w-7 h-7 bg-white/40 dark:bg-black/40 hover:bg-white/80 dark:hover:bg-neutral-700/80 rounded text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shadow-sm border border-transparent hover:border-white/20 cursor-pointer pointer-events-auto"
                                 title="Rename"
                             >
                                 <Pencil size={14} />
                             </button>
-                            <button 
+                            <button
                                 type="button"
-                                onClick={(e) => promptDeleteSession(e, s.id)} 
+                                onClick={(e) => promptDeleteSession(e, s.id)}
                                 className="flex items-center justify-center w-7 h-7 bg-white/40 dark:bg-black/40 hover:bg-white/80 dark:hover:bg-neutral-700/80 rounded text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors shadow-sm border border-transparent hover:border-white/20 cursor-pointer pointer-events-auto"
                                 title="Delete"
                             >
@@ -684,7 +749,7 @@ const App: React.FC = () => {
 
             {/* Footer Settings */}
             <div className="p-4 border-t border-white/10 dark:border-white/5">
-                <button 
+                <button
                     onClick={() => { setIsSettingsOpen(true); setIsSidebarOpen(false); }}
                     className="flex items-center gap-3 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-white/10 dark:hover:bg-white/5"
                 >
@@ -698,7 +763,7 @@ const App: React.FC = () => {
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative z-10 pt-0 md:pt-0 transition-all duration-300">
         {activeSession ? (
-            <ChatInterface 
+            <ChatInterface
                 session={activeSession}
                 updateSession={updateActiveSession}
                 auxPresets={auxPresets}
@@ -716,7 +781,7 @@ const App: React.FC = () => {
             <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto bg-transparent relative">
                 {/* Expand Sidebar Button - Mobile: show when sidebar is closed, Desktop: show when sidebar is collapsed */}
                 {(!isSidebarOpen || isSidebarCollapsed) && (
-                    <button 
+                    <button
                         onClick={() => {
                             if (!isSidebarOpen) {
                                 setIsSidebarOpen(true);
@@ -730,7 +795,7 @@ const App: React.FC = () => {
                         <PanelLeftOpen size={20} />
                     </button>
                 )}
-                
+
                 <div className="w-16 h-16 bg-white dark:bg-neutral-900 rounded-2xl flex items-center justify-center mb-6 shadow-xl dark:shadow-indigo-900/10 border border-gray-100 dark:border-neutral-800">
                     <MessageSquare size={32} className="text-indigo-600 dark:text-indigo-500" />
                 </div>
@@ -738,10 +803,10 @@ const App: React.FC = () => {
                 <p className="max-w-md text-center mb-10 text-gray-600 dark:text-gray-300 text-lg drop-shadow-sm">
                     Choose a template to start a new synchronized multi-model session.
                 </p>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-5xl">
                     {/* New Empty Card */}
-                    <button 
+                    <button
                          onClick={createEmptySession}
                          className="flex flex-col items-center justify-center p-6 bg-white/10 dark:bg-black/30 backdrop-blur-sm border border-white/20 dark:border-white/10 border-dashed hover:border-indigo-500/50 hover:bg-white/20 dark:hover:bg-black/50 rounded-xl transition-all group h-48"
                     >
@@ -754,7 +819,7 @@ const App: React.FC = () => {
 
                     {/* Presets */}
                     {sessionPresets.map(sp => (
-                        <button 
+                        <button
                             key={sp.id}
                             onClick={() => createSession(sp.id)}
                             className="flex flex-col text-left p-6 bg-white/10 dark:bg-black/30 backdrop-blur-sm border border-white/20 dark:border-white/10 hover:border-indigo-500/50 hover:bg-white/20 dark:hover:bg-black/50 hover:shadow-xl dark:hover:shadow-indigo-900/10 rounded-xl transition-all group h-48 relative overflow-hidden"
@@ -780,7 +845,7 @@ const App: React.FC = () => {
       </div>
 
       {/* MODALS */}
-      <SettingsModal 
+      <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
@@ -877,13 +942,13 @@ const App: React.FC = () => {
                       placeholder="Enter new name..."
                   />
                   <div className="flex justify-end gap-3">
-                      <button 
+                      <button
                           onClick={() => setItemToRename(null)}
                           className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-sm transition-colors"
                       >
                           Cancel
                       </button>
-                      <button 
+                      <button
                           onClick={performRename}
                           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
                       >
